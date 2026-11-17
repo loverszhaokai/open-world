@@ -6229,7 +6229,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
 
   async #waitForProviderIdentity(
     expectedEventType?: "harness.ready" | "session.started" | "session.resumed",
-    deadline = Date.now() + 30_000,
+    deadline = Date.now() + defaultRunnerCommandWaitMs(),
   ): Promise<void> {
     while (Date.now() < deadline) {
       this.#throwIfFailed();
@@ -6254,7 +6254,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   async #waitCommand(
     type: string,
     commandId?: string,
-    deadline = Date.now() + 30_000,
+    deadline = Date.now() + defaultRunnerCommandWaitMs(),
     abortOnClose = false,
   ): Promise<void> {
     await waitForRunnerCommand({
@@ -7470,6 +7470,18 @@ export function resolveRunnerdCodexSkillInputs(
 }
 
 /** Controller admission budget; ordinary command and turn deadlines are independent. */
+/**
+ * Default wait for one PRP startup command (run.prepare, session.open, provider
+ * identity). Upstream default is 30 s; a loaded host that cold-starts a freshly
+ * copied provider binary can exceed it, so allow an operator override via
+ * PAPERCLIP_RUNNER_COMMAND_WAIT_MS (milliseconds, minimum 1000).
+ */
+export function defaultRunnerCommandWaitMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.PAPERCLIP_RUNNER_COMMAND_WAIT_MS;
+  const parsed = raw === undefined || raw.trim() === "" ? Number.NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed >= 1_000 ? Math.floor(parsed) : 30_000;
+}
+
 export function coldAdmissionTimeoutMs(provider: string | undefined, agent: string | undefined, coldProcess: boolean): number {
   return coldProcess && provider === "acpx" && agent === "pi" ? 60_000 : 30_000;
 }
