@@ -94,3 +94,40 @@ describe("isValidAgentShortName", () => {
     }
   });
 });
+
+/**
+ * The server's `withUrlKey` sets `urlKey` from `resolveAgentUrlKey`, and
+ * `resolveByReference` matches an incoming reference against that same
+ * `urlKey`. These cases pin the lookup behaviour that depends on it.
+ */
+describe("agent reference lookup via urlKey", () => {
+  const key = (agent: { id: string; name?: string | null; shortName?: string | null }) =>
+    resolveAgentUrlKey(agent);
+
+  it("makes a Chinese-named agent reachable by its short name", () => {
+    const agent = { id: ID, name: "听澜", shortName: "ting-lan" };
+    expect(key(agent)).toBe(normalizeAgentUrlKey("ting-lan"));
+    // And the reference the user types normalizes to the same thing.
+    expect(normalizeAgentUrlKey("Ting-Lan")).toBe(key(agent));
+  });
+
+  it("stops the old derived key resolving once a short name is set", () => {
+    // 'head-of-paid-growth' must no longer hit this agent, or two keys would
+    // reach one agent and a rename could not be relied on.
+    const agent = { id: ID, name: "Head of Paid Growth", shortName: "hopg" };
+    expect(key(agent)).not.toBe("head-of-paid-growth");
+  });
+
+  it("keeps two agents distinguishable when one takes a short name", () => {
+    const a = { id: "id-a", name: "Analyst", shortName: "fen-xi-shi" };
+    const b = { id: "id-b", name: "Analyst" };
+    expect(key(a)).not.toBe(key(b));
+  });
+
+  it("would make two agents ambiguous if a short name duplicated a derived key", () => {
+    // The uniqueness guard on the server exists precisely to prevent this.
+    const a = { id: "id-a", name: "听澜", shortName: "analyst" };
+    const b = { id: "id-b", name: "Analyst" };
+    expect(key(a)).toBe(key(b));
+  });
+});
