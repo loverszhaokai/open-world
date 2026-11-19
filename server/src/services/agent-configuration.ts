@@ -14,7 +14,8 @@ import { budgetServiceInTransaction } from "./budgets.js";
 
 export async function prepareAgentConfiguration(db: Db, existing: AgentConfigurationRecord, data: AgentConfigurationPatch, options?: UpdateAgentOptions): Promise<AgentConfigurationPatch> {
   const id = existing.id;
-  const { ensureManager, assertNoCycle, assertCompanyShortnameAvailable, assertBuiltInAgentMetadataMutationAllowed } = agentRecordQueries(db);
+  const { ensureManager, assertNoCycle, assertCompanyShortnameAvailable, assertCompanyShortNameAvailable,
+    assertBuiltInAgentMetadataMutationAllowed } = agentRecordQueries(db);
   if (existing.status === "pending_approval" && !options?.allowPendingApprovalConfigUpdate) {
     const changedFields = changedPendingApprovalConfigFields(agentRecordQueries(db).normalizeAgentRow(existing), data);
     if (changedFields.length > 0) {
@@ -33,7 +34,19 @@ export async function prepareAgentConfiguration(db: Db, existing: AgentConfigura
     await assertNoCycle(id, data.reportsTo);
   }
 
-  if (data.name !== undefined) {
+  // An explicit short name becomes the agent's only URL key, so it is checked
+  // against every key already in use in the company — other agents' short
+  // names and the keys they derive from their names alike.
+  const nextShortName = data.shortName !== undefined ? data.shortName : existing.shortName;
+  if (data.shortName !== undefined && data.shortName) {
+    if (normalizeAgentUrlKey(data.shortName) !== normalizeAgentUrlKey(existing.shortName)) {
+      await assertCompanyShortNameAvailable(existing.companyId, data.shortName, { excludeAgentId: id });
+    }
+  }
+
+  // A rename only moves the URL key while the agent has no short name; with one
+  // set, the derived key is unreachable and cannot collide with anything.
+  if (data.name !== undefined && !nextShortName) {
     const previousShortname = normalizeAgentUrlKey(existing.name);
     const nextShortname = normalizeAgentUrlKey(data.name);
     if (previousShortname !== nextShortname) {

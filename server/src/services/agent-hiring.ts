@@ -1,10 +1,10 @@
-import { agentAppearanceSchema, randomAgentAppearance } from "@paperclipai/shared";
+import { agentAppearanceSchema, normalizeAgentUrlKey, randomAgentAppearance } from "@paperclipai/shared";
 import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
 import { agents, toolConnectionInstalls, principalPermissionGrants, type Db } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
-import { unprocessable } from "../errors.js";
+import { conflict, unprocessable } from "../errors.js";
 import { agentRecordQueries, isPlainRecord, configPatchFromApprovalPayload, normalizeRuntimeConfigForNewAgent,
-  deduplicateAgentName, type CreateAgentData, type CreateAgentOptions, type AgentConfigurationPatch, type AgentHireRecord } from "../lib/agent-records.js";
+  deduplicateAgentName, hasAgentShortNameConflict, type CreateAgentData, type CreateAgentOptions, type AgentConfigurationPatch, type AgentHireRecord } from "../lib/agent-records.js";
 import { normalizeAgentPermissions, permissionsImplyLowTrust, NEW_STANDARD_AGENT_DEFAULT_GRANT_KEYS,
   newStandardAgentGrantScope } from "../lib/agent-permissions.js";
 import { readBuiltInAgentMarker } from "../lib/built-in-agent-metadata.js";
@@ -31,10 +31,22 @@ export async function prepareAgentHire(db: Db, companyId: string, input: CreateA
   }
 
   const existingAgents = await db
-    .select({ id: agents.id, name: agents.name, status: agents.status })
+    .select({ id: agents.id, name: agents.name, shortName: agents.shortName, status: agents.status })
     .from(agents)
     .where(eq(agents.companyId, companyId));
-  const uniqueName = deduplicateAgentName(data.name, existingAgents.filter(agent => agent.id !== options?.setupAgentId));
+  const otherAgents = existingAgents.filter(agent => agent.id !== options?.setupAgentId);
+
+  // An explicit short name is the new agent's only URL key, so a clash is an
+  // error rather than something to quietly suffix: the caller asked for that
+  // exact key.
+  const shortName = data.shortName ? normalizeAgentUrlKey(data.shortName) : null;
+  if (shortName && hasAgentShortNameConflict(shortName, otherAgents)) {
+    throw conflict(`Agent shortname '${shortName}' is already in use in this company`);
+  }
+
+  // Without a short name the URL key still comes from the name, so a colliding
+  // name keeps getting suffixed as before. With one, the name is free to repeat.
+  const uniqueName = shortName ? data.name : deduplicateAgentName(data.name, otherAgents);
 
   const role = data.role ?? "general";
   const normalizedPermissions = normalizeAgentPermissions(data.permissions, { context: "create" });
@@ -49,7 +61,7 @@ export async function prepareAgentHire(db: Db, companyId: string, input: CreateA
     childAdapterConfig: adapterConfig, claudeLogin: options?.claudeLogin,
     decision: assertClaudeOAuthBindingInvariant({ adapterType, nextConfig: adapterConfig }),
   });
-  return { ...data, name: uniqueName,
+  return { ...data, name: uniqueName, shortName,
     appearance: data.appearance == null ? randomAgentAppearance() : agentAppearanceSchema.parse(data.appearance),
     role, adapterType, adapterConfig, permissions: normalizedPermissions, runtimeConfig };
 }

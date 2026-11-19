@@ -22,6 +22,8 @@ import { AGENT_ROLE_LABELS } from "@paperclipai/shared";
 export const help: Record<string, string> = {
   name: "Display name for this agent.",
   title: "Job title shown in the org chart.",
+  shortName:
+    "Short name used in this agent's URL, for example 'ting-lan'. Lowercase letters, digits and hyphens only. Leave blank to derive one from the name — a name with no Latin letters cannot be derived from, so those agents fall back to their UUID until you set this. Unlike the name, a short name does not change when the agent is renamed, so saved links keep working.",
   role: "Organizational role. Determines position and capabilities.",
   reportsTo: "The agent this one reports to in the org hierarchy.",
   capabilities: "Describes what this agent can do. Shown in the org chart and used for task routing.",

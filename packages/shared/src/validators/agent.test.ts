@@ -23,3 +23,43 @@ describe("agent update schema", () => {
     expect(updateAgentSchema.parse({ name: "Renamed", budgetMonthlyCents: 100 })).toEqual({ name: "Renamed", budgetMonthlyCents: 100 });
   });
 });
+
+describe("agent shortName validation", () => {
+  it.each(["ting-lan", "hai-tang", "tou-shou-1", "ceo"])("accepts %s", shortName => {
+    expect(updateAgentSchema.parse({ shortName })).toEqual({ shortName });
+  });
+
+  it.each(["Ting-Lan", "ting lan", "听澜", "ting_lan", "-ting", "ting--lan"])(
+    "rejects %s, which would not survive normalization",
+    shortName => {
+      const result = updateAgentSchema.safeParse({ shortName });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: ["shortName"] }),
+      ]));
+    },
+  );
+
+  it("rejects a UUID, which the resolver tries as an id first", () => {
+    const result = updateAgentSchema.safeParse({ shortName: "11111111-2222-4333-8444-555555555555" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an over-long short name", () => {
+    expect(updateAgentSchema.safeParse({ shortName: "a".repeat(65) }).success).toBe(false);
+  });
+
+  it("treats a blank field as clearing the short name", () => {
+    // A form can hand back an empty input without needing a separate delete.
+    expect(updateAgentSchema.parse({ shortName: "" })).toEqual({ shortName: null });
+    expect(updateAgentSchema.parse({ shortName: "   " })).toEqual({ shortName: null });
+  });
+
+  it("accepts an explicit null", () => {
+    expect(updateAgentSchema.parse({ shortName: null })).toEqual({ shortName: null });
+  });
+
+  it("leaves shortName out when it is not supplied", () => {
+    expect(updateAgentSchema.parse({ name: "Renamed" })).toEqual({ name: "Renamed" });
+  });
+});

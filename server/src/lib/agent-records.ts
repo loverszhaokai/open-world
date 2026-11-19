@@ -4,7 +4,7 @@ import { agents, costEvents, type Db } from "@paperclipai/db";
 import {
   agentAppearanceSchema, resolveAgentAppearance, agentAvatarUrl,
   AGENT_DEFAULT_MAX_CONCURRENT_RUNS, agentRuntimeConfigSchema, getAgentWorkEligibility,
-  normalizeAgentUrlKey, type AgentEligibilityAgent, type AgentRunnerChoice,
+  normalizeAgentUrlKey, resolveAgentUrlKey, type AgentEligibilityAgent, type AgentRunnerChoice,
 } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import { REDACTED_EVENT_VALUE, sanitizeRecord } from "../redaction.js";
@@ -21,6 +21,7 @@ export function createToken() {
 
 const CONFIG_REVISION_FIELDS = [
   "name",
+  "shortName",
   "role",
   "title",
   "icon",
@@ -102,6 +103,7 @@ interface AgentShortnameRow {
   id: string;
   name: string;
   status: string;
+  shortName?: string | null;
 }
 
 interface AgentShortnameCollisionOptions {
@@ -133,6 +135,7 @@ export function buildConfigSnapshot(
       : row.metadata ?? null;
   return {
     name: row.name,
+    shortName: row.shortName,
     role: row.role,
     title: row.title,
     icon: row.icon,
@@ -171,6 +174,9 @@ export function changedPendingApprovalConfigFields(
 export function configPatchFromApprovalPayload(payload: Record<string, unknown>) {
   const patch: Partial<typeof agents.$inferInsert> = {};
   if (typeof payload.name === "string") patch.name = payload.name;
+  if (Object.prototype.hasOwnProperty.call(payload, "shortName")) {
+    patch.shortName = typeof payload.shortName === "string" ? payload.shortName : null;
+  }
   if (typeof payload.role === "string") patch.role = payload.role;
   if (payload.appearance != null) patch.appearance = agentAppearanceSchema.parse(payload.appearance);
   if (Object.prototype.hasOwnProperty.call(payload, "title")) {
@@ -274,6 +280,28 @@ export function configPatchFromSnapshot(snapshot: unknown): Partial<typeof agent
   };
 }
 
+/**
+ * Every key an existing agent already answers to.
+ *
+ * An agent with an explicit `shortName` answers only to that one: its derived
+ * name key is no longer reachable, so reserving it would block a perfectly
+ * usable key for no reason. An agent without one answers to the derived key, as
+ * it always has.
+ */
+function occupiedAgentUrlKeys(
+  existingAgents: AgentShortnameRow[],
+  options?: AgentShortnameCollisionOptions,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const agent of existingAgents) {
+    if (agent.status === "terminated") continue;
+    if (options?.excludeAgentId && agent.id === options.excludeAgentId) continue;
+    const key = normalizeAgentUrlKey(agent.shortName) ?? normalizeAgentUrlKey(agent.name);
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
 export function hasAgentShortnameCollision(
   candidateName: string,
   existingAgents: AgentShortnameRow[],
@@ -282,11 +310,26 @@ export function hasAgentShortnameCollision(
   const candidateShortname = normalizeAgentUrlKey(candidateName);
   if (!candidateShortname) return false;
 
-  return existingAgents.some((agent) => {
-    if (agent.status === "terminated") return false;
-    if (options?.excludeAgentId && agent.id === options.excludeAgentId) return false;
-    return normalizeAgentUrlKey(agent.name) === candidateShortname;
-  });
+  return occupiedAgentUrlKeys(existingAgents, options).has(candidateShortname);
+}
+
+/**
+ * Whether an explicit `shortName` is already taken in this company.
+ *
+ * Unlike a name, a short name is the agent's only key, so it must be unique
+ * against both other agents' short names and the keys other agents derive from
+ * their names — otherwise two agents would answer to one key and the resolver
+ * would start reporting `ambiguous`.
+ */
+export function hasAgentShortNameConflict(
+  candidateShortName: string,
+  existingAgents: AgentShortnameRow[],
+  options?: AgentShortnameCollisionOptions,
+): boolean {
+  const candidate = normalizeAgentUrlKey(candidateShortName);
+  if (!candidate) return false;
+
+  return occupiedAgentUrlKeys(existingAgents, options).has(candidate);
 }
 
 export function deduplicateAgentName(
@@ -315,10 +358,10 @@ export function agentRecordQueries(db: Db) {
     };
   }
 
-  function withUrlKey<T extends { id: string; name: string }>(row: T) {
+  function withUrlKey<T extends { id: string; name: string; shortName?: string | null }>(row: T) {
     return {
       ...row,
-      urlKey: normalizeAgentUrlKey(row.name) ?? row.id,
+      urlKey: resolveAgentUrlKey(row),
     };
   }
 
@@ -432,6 +475,18 @@ export function agentRecordQueries(db: Db) {
     }
   }
 
+  async function listCompanyShortnameRows(companyId: string) {
+    return db
+      .select({
+        id: agents.id,
+        name: agents.name,
+        shortName: agents.shortName,
+        status: agents.status,
+      })
+      .from(agents)
+      .where(eq(agents.companyId, companyId));
+  }
+
   async function assertCompanyShortnameAvailable(
     companyId: string,
     candidateName: string,
@@ -440,19 +495,33 @@ export function agentRecordQueries(db: Db) {
     const candidateShortname = normalizeAgentUrlKey(candidateName);
     if (!candidateShortname) return;
 
-    const existingAgents = await db
-      .select({
-        id: agents.id,
-        name: agents.name,
-        status: agents.status,
-      })
-      .from(agents)
-      .where(eq(agents.companyId, companyId));
+    const existingAgents = await listCompanyShortnameRows(companyId);
 
     const hasCollision = hasAgentShortnameCollision(candidateName, existingAgents, options);
     if (hasCollision) {
       throw conflict(
         `Agent shortname '${candidateShortname}' is already in use in this company`,
+      );
+    }
+  }
+
+  /**
+   * Guards an explicit `shortName` write. The short name becomes the agent's
+   * only URL key, so it has to be free against every key already in use in the
+   * company, including the ones other agents derive from their names.
+   */
+  async function assertCompanyShortNameAvailable(
+    companyId: string,
+    candidateShortName: string,
+    options?: AgentShortnameCollisionOptions,
+  ) {
+    const candidate = normalizeAgentUrlKey(candidateShortName);
+    if (!candidate) return;
+
+    const existingAgents = await listCompanyShortnameRows(companyId);
+    if (hasAgentShortNameConflict(candidateShortName, existingAgents, options)) {
+      throw conflict(
+        `Agent shortname '${candidate}' is already in use in this company`,
       );
     }
   }
@@ -473,5 +542,6 @@ export function agentRecordQueries(db: Db) {
   }
 
   return { normalizeAgentRows, normalizeAgentRow, listCompanyAgentRows, hydrateAgentSpend,
-    getById, ensureManager, assertNoCycle, assertCompanyShortnameAvailable, assertBuiltInAgentMetadataMutationAllowed };
+    getById, ensureManager, assertNoCycle, assertCompanyShortnameAvailable,
+    assertCompanyShortNameAvailable, assertBuiltInAgentMetadataMutationAllowed };
 }
