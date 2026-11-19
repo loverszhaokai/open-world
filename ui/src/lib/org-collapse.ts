@@ -101,3 +101,32 @@ export function reconcileExpandedIds(
   if (kept.size === 0) return defaultExpandedIds(roots);
   return kept;
 }
+
+/**
+ * A stable string identity for the *shape* of an org tree.
+ *
+ * The chart auto-fits the viewport once, when a tree first arrives, and must
+ * not do it again while the user is panning and zooming. But the query layer
+ * hands back a new array on every refetch (`staleTime` expiry, window refocus),
+ * and keying the one-shot fit off the tree's object reference therefore re-ran
+ * it every 30 seconds and threw away the user's zoom.
+ *
+ * Only the ids and the parent/child nesting matter here: those are what the
+ * layout — and so the fitted zoom and pan — are computed from. Fields that can
+ * change without moving a single card (status, title, spend, heartbeat) are
+ * deliberately excluded, so a refetch that merely refreshes them is recognised
+ * as the same chart. A genuine restructure (company switch, a hire, a firing, a
+ * re-org) changes an id or the nesting and so changes the identity, which is
+ * what should re-fit.
+ */
+export function orgTreeIdentity(roots: readonly OrgNode[] | null | undefined): string {
+  if (!roots) return "";
+  const parts: string[] = [];
+  function walk(node: OrgNode) {
+    parts.push("(", node.id);
+    for (const child of node.reports) walk(child);
+    parts.push(")");
+  }
+  for (const root of roots) walk(root);
+  return parts.join("");
+}

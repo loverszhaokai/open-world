@@ -19,6 +19,7 @@ import {
   allParentIds,
   defaultExpandedIds,
   descendantCount,
+  orgTreeIdentity,
   pruneCollapsed,
   reconcileExpandedIds,
   toggleExpanded,
@@ -370,15 +371,24 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
     };
   }, []);
 
-  // Center the chart on first load
+  // Center the chart on first load, and again when the org itself changes.
+  //
+  // This is keyed off the tree's *shape* (ids + nesting), never its object
+  // identity. React Query hands back a brand-new array on every refetch — and
+  // the app sets `staleTime: 30_000` with `refetchOnWindowFocus: true`, so a
+  // refetch lands whenever the user tabs back or simply waits — which, keyed
+  // off the reference, re-ran the auto-fit and silently reset whatever zoom
+  // and pan the user had set. Comparing the shape keeps the fit a genuine
+  // one-shot: a refetch that returns the same chart is a no-op, while a
+  // company switch or a real re-org still re-fits.
+  const treeIdentity = useMemo(() => orgTreeIdentity(orgTree), [orgTree]);
   const hasInitialized = useRef(false);
-  useEffect(() => {
-    hasInitialized.current = false;
-  }, [orgTree]);
+  const fittedIdentity = useRef<string | null>(null);
 
   useEffect(() => {
     const refitting = refitAfterLayout.current;
-    if ((hasInitialized.current && !refitting) || allNodes.length === 0 || !containerRef.current) {
+    const identityChanged = fittedIdentity.current !== null && fittedIdentity.current !== treeIdentity;
+    if ((hasInitialized.current && !refitting && !identityChanged) || allNodes.length === 0 || !containerRef.current) {
       return;
     }
     const container = containerRef.current;
@@ -387,9 +397,10 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
 
     refitAfterLayout.current = false;
     hasInitialized.current = true;
+    fittedIdentity.current = treeIdentity;
     setZoom(fitted.zoom);
     setPan(fitted.pan);
-  }, [allNodes, bounds]);
+  }, [allNodes, bounds, treeIdentity]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;

@@ -4,6 +4,7 @@ import {
   allParentIds,
   defaultExpandedIds,
   descendantCount,
+  orgTreeIdentity,
   pruneCollapsed,
   reconcileExpandedIds,
   toggleExpanded,
@@ -195,5 +196,63 @@ describe("reconcileExpandedIds", () => {
         expect(parents.has(id)).toBe(true);
       }
     }
+  });
+});
+
+describe("orgTreeIdentity", () => {
+  it("is stable across a refetch that rebuilds an identical tree", () => {
+    // The whole point: React Query hands back a new array every refetch, so
+    // the identity must depend on content rather than reference.
+    expect(org()).not.toBe(org());
+    expect(orgTreeIdentity(org())).toBe(orgTreeIdentity(org()));
+  });
+
+  it("ignores fields that cannot move a card", () => {
+    // A refetch that only refreshes status/title/spend must read as the same
+    // chart, because none of those change the layout the fit is computed from.
+    const busy = org();
+    busy[0]!.status = "running";
+    busy[0]!.name = "Renamed CEO";
+    busy[0]!.role = "cto";
+    expect(orgTreeIdentity(busy)).toBe(orgTreeIdentity(org()));
+  });
+
+  it("changes when an agent is hired", () => {
+    const hired = org();
+    hired[0]!.reports.push(node("new-hire"));
+    expect(orgTreeIdentity(hired)).not.toBe(orgTreeIdentity(org()));
+  });
+
+  it("changes when an agent is removed", () => {
+    const fired = org();
+    fired[0]!.reports.pop();
+    expect(orgTreeIdentity(fired)).not.toBe(orgTreeIdentity(org()));
+  });
+
+  it("changes when the same people are re-parented", () => {
+    // A re-org keeps every id but moves the nesting, which does change the
+    // layout, so it must re-fit.
+    const flat = [node("ceo", [node("cao"), node("dev-1"), node("dev-2")])];
+    const nested = [node("ceo", [node("cao", [node("dev-1"), node("dev-2")])])];
+    expect(orgTreeIdentity(flat)).not.toBe(orgTreeIdentity(nested));
+  });
+
+  it("distinguishes two different companies", () => {
+    expect(orgTreeIdentity([node("a")])).not.toBe(orgTreeIdentity([node("b")]));
+  });
+
+  it("is order-sensitive, because the layout is", () => {
+    expect(orgTreeIdentity([node("a"), node("b")])).not.toBe(orgTreeIdentity([node("b"), node("a")]));
+  });
+
+  it("does not confuse a sibling with a child", () => {
+    // Without the nesting delimiters, "a" + "b" would collide either way.
+    expect(orgTreeIdentity([node("a"), node("b")])).not.toBe(orgTreeIdentity([node("a", [node("b")])]));
+  });
+
+  it("treats no tree and an empty tree as empty", () => {
+    expect(orgTreeIdentity(undefined)).toBe("");
+    expect(orgTreeIdentity(null)).toBe("");
+    expect(orgTreeIdentity([])).toBe("");
   });
 });
