@@ -742,3 +742,229 @@ describe("OrgChart wheel interaction", () => {
     expect(pinch.defaultPrevented).toBe(true);
   });
 });
+
+/**
+ * The chart auto-fits once so the user does not open it on an empty corner.
+ * That fit used to be keyed off the org tree's object reference, and React
+ * Query hands back a new array on every refetch — with `staleTime: 30_000` and
+ * `refetchOnWindowFocus: true` set app-wide, one lands whenever the user tabs
+ * away and back, or simply waits. The auto-fit therefore re-ran and threw away
+ * whatever zoom and pan they had set, a few seconds after they set it.
+ */
+describe("OrgChart viewport stability across refetches", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+  let queryClient: QueryClient;
+  const viewportWidth = 800;
+  const viewportHeight = 600;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    orgMock.mockResolvedValue(orgTree);
+    listMock.mockResolvedValue(agents);
+
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return this.getAttribute("data-testid") === "org-chart-viewport" ? viewportWidth : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return this.getAttribute("data-testid") === "org-chart-viewport" ? viewportHeight : 0;
+      },
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getRect(this: HTMLElement) {
+      const isViewport = this.getAttribute("data-testid") === "org-chart-viewport";
+      const width = isViewport ? viewportWidth : 0;
+      const height = isViewport ? viewportHeight : 0;
+      return { x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) };
+    });
+  });
+
+  afterEach(async () => {
+    if (root) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+    container.remove();
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  async function renderChart() {
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <OrgChart />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+    return {
+      viewport: container.querySelector('[data-testid="org-chart-viewport"]') as HTMLDivElement,
+      layer: container.querySelector('[data-testid="org-chart-card-layer"]') as HTMLDivElement,
+    };
+  }
+
+  function readTransform(layer: HTMLDivElement) {
+    const match = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(layer.style.transform);
+    if (!match) throw new Error(`unexpected transform: ${layer.style.transform}`);
+    return { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) };
+  }
+
+  /** Zoom in the way the user does: a pinch, which the browser marks with ctrlKey. */
+  async function pinchZoomIn(viewport: HTMLDivElement) {
+    await act(async () => {
+      viewport.dispatchEvent(
+        new WheelEvent("wheel", {
+          bubbles: true, cancelable: true, deltaY: -100, ctrlKey: true, clientX: 400, clientY: 300,
+        }),
+      );
+    });
+  }
+
+  /**
+   * A live org chart never refetches *identical* data: statuses, spend and
+   * heartbeats move constantly, and React Query's structural sharing only
+   * preserves the old reference when the payload is deeply equal. So the
+   * refetch that actually reset the user's zoom is one carrying a trivial
+   * live-data change, and that is what these tests send.
+   */
+  function withStatus(status: string) {
+    const next = structuredClone(orgTree);
+    next[0]!.reports[0]!.status = status;
+    return next;
+  }
+
+  it("keeps the user's zoom when a refetch brings fresh live data", async () => {
+    const { viewport, layer } = await renderChart();
+    const fitted = readTransform(layer);
+
+    await pinchZoomIn(viewport);
+    const zoomed = readTransform(layer);
+    expect(zoomed.zoom).toBeGreaterThan(fitted.zoom);
+
+    orgMock.mockResolvedValue(withStatus("running"));
+    listMock.mockResolvedValue(structuredClone(agents));
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await flushReact();
+    await flushReact();
+
+    expect(readTransform(layer)).toEqual(zoomed);
+  });
+
+  it("keeps the user's zoom across several successive refetches", async () => {
+    const { viewport, layer } = await renderChart();
+    await pinchZoomIn(viewport);
+    await pinchZoomIn(viewport);
+    const zoomed = readTransform(layer);
+
+    // Each round delivers a different status, so every refetch hands the
+    // component a genuinely new tree object, as the live page does.
+    for (const status of ["running", "idle", "running"]) {
+      orgMock.mockResolvedValue(withStatus(status));
+      await act(async () => {
+        await queryClient.refetchQueries();
+      });
+      await flushReact();
+    }
+
+    expect(readTransform(layer)).toEqual(zoomed);
+  });
+
+  it("keeps the user's zoom even when structural sharing is off", async () => {
+    // Belt and braces: with structural sharing disabled, every refetch hands
+    // down a new array even for byte-identical data. The fit must still be a
+    // one-shot, which is only true if it compares content, not references.
+    queryClient.setDefaultOptions({ queries: { retry: false, structuralSharing: false } });
+    const { viewport, layer } = await renderChart();
+    await pinchZoomIn(viewport);
+    const zoomed = readTransform(layer);
+
+    orgMock.mockResolvedValue(structuredClone(orgTree));
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await flushReact();
+    await flushReact();
+
+    expect(readTransform(layer)).toEqual(zoomed);
+  });
+
+  it("keeps the user's zoom when a refetch only changes a card's status", async () => {
+    const { viewport, layer } = await renderChart();
+    await pinchZoomIn(viewport);
+    const zoomed = readTransform(layer);
+
+    // An agent going idle -> running repaints a card but moves nothing, so it
+    // must not count as a new chart.
+    const busy = structuredClone(orgTree);
+    busy[0]!.status = "running";
+    orgMock.mockResolvedValue(busy);
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await flushReact();
+    await flushReact();
+
+    expect(readTransform(layer)).toEqual(zoomed);
+  });
+
+  it("re-fits when a refetch brings a genuinely different org", async () => {
+    const { viewport, layer } = await renderChart();
+    await pinchZoomIn(viewport);
+    const zoomed = readTransform(layer);
+
+    // A real hire changes the layout, so the chart must re-fit rather than
+    // leave the user zoomed in on a chart that just grew past the viewport.
+    const grown = structuredClone(orgTree);
+    grown[0]!.reports.push({
+      id: "agent-3", name: "Designer", role: "engineer", status: "active", reports: [],
+    });
+    orgMock.mockResolvedValue(grown);
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await flushReact();
+    await flushReact();
+
+    expect(readTransform(layer)).not.toEqual(zoomed);
+  });
+
+  it("re-fits when the reporting structure is rearranged", async () => {
+    const { viewport, layer } = await renderChart();
+    await pinchZoomIn(viewport);
+    const zoomed = readTransform(layer);
+
+    // Same two people, different nesting: a re-org that does move the cards.
+    orgMock.mockResolvedValue([
+      { id: "agent-1", name: "CEO", role: "ceo", status: "active", reports: [] },
+      { id: "agent-2", name: "Engineer", role: "engineer", status: "active", reports: [] },
+    ]);
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await flushReact();
+    await flushReact();
+
+    expect(readTransform(layer)).not.toEqual(zoomed);
+  });
+
+  it("still fits the chart on first load", async () => {
+    // The regression guard must not turn into "never fit at all".
+    const { layer } = await renderChart();
+    const fitted = readTransform(layer);
+    expect(fitted.zoom).toBeGreaterThan(0);
+    expect(layer.style.transform).toContain("scale(");
+  });
+});
