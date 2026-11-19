@@ -18,7 +18,7 @@ import {
 } from "../lib/agent-records.js";
 import { createAgentLifecycle } from "./agent-lifecycle.js";
 
-export { hasAgentShortnameCollision, deduplicateAgentName } from "../lib/agent-records.js";
+export { hasAgentShortnameCollision, hasAgentShortNameConflict, deduplicateAgentName } from "../lib/agent-records.js";
 
 export function agentService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
   const {

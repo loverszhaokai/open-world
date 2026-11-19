@@ -4,6 +4,7 @@ import { agentHarnessType, agentRunner, paperclipRunnerProfileForHarness, type A
 import { adaptersApi } from "../api/adapters";
 import { AgentRunnerSelect } from "./AgentRunnerSelect";
 import { aiRoutingHarness } from "@paperclipai/shared";
+import { normalizeAgentUrlKey } from "@paperclipai/shared";
 import { AiConnectionField } from "./ai-connections/AiConnectionField";
 import { aiConnectionBindingSchema, aiRuntimeConnectionBindingSchema } from "@paperclipai/shared";
 import { testAgentSetup } from "@/lib/test-agent-setup";
@@ -1577,6 +1578,19 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 immediate
                 className={inputClass}
                 placeholder="Agent name"
+              />
+            </Field>
+            <Field label="Short name" hint={help.shortName}>
+              <DraftInput
+                value={eff("identity", "shortName", props.agent.shortName ?? "")}
+                // Blank clears it, which puts the agent back on the key derived
+                // from its name. The server normalizes and rejects anything
+                // that is not a valid key, so a bad value surfaces as a save
+                // error rather than being silently rewritten.
+                onCommit={(v) => mark("identity", "shortName", v.trim() || null)}
+                immediate
+                className={inputClass}
+                placeholder={normalizeAgentUrlKey(eff("identity", "name", props.agent.name)) ?? "e.g. ting-lan"}
               />
             </Field>
             <Field label="Title" hint={help.title}>

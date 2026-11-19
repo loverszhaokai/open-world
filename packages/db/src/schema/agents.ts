@@ -20,6 +20,12 @@ export const agents = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     name: text("name").notNull(),
+    // An explicit, stable URL key. The chart and the API otherwise derive one
+    // from `name`, which breaks two ways: a name made only of non-ASCII
+    // characters normalizes to nothing and falls back to the bare UUID, and
+    // renaming an agent silently moves its URL, invalidating saved links and
+    // scripts. When set, this wins over the derived value.
+    shortName: text("short_name"),
     role: text("role").notNull().default("general"),
     title: text("title"),
     icon: text("icon"),

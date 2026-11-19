@@ -84,6 +84,11 @@ export interface Agent {
   id: string;
   companyId: string;
   name: string;
+  /**
+   * The explicit, stable URL key, when the agent has one. `urlKey` is what to
+   * read for addressing; this is the stored override behind it.
+   */
+  shortName?: string | null;
   urlKey: string;
   role: AgentRole;
   title: string | null;

@@ -1,4 +1,5 @@
 import { agentAppearanceSchema } from "../agent-appearance.js";
+import { AGENT_SHORT_NAME_MAX_LENGTH, isValidAgentShortName } from "../agent-url-key.js";
 import { aiRuntimeConnectionBindingSchema as aiConnectionBindingSchema } from "../ai-connection-router.js";
 import { z } from "zod";
 import {
@@ -86,6 +87,20 @@ export const agentRuntimeConfigSchema = z.object({
 export const createAgentSchema = z.object({
   setupId: z.string().guid().optional(),
   name: z.string().min(1),
+  // An explicit, stable URL key, taking priority over the one derived from
+  // `name`. Empty string is accepted as "clear it" and normalized to null, so a
+  // form can hand back a blank field without a separate delete call.
+  shortName: z
+    .string()
+    .trim()
+    .max(AGENT_SHORT_NAME_MAX_LENGTH)
+    .transform((value) => (value.length === 0 ? null : value))
+    .refine((value) => value === null || isValidAgentShortName(value), {
+      message:
+        "shortName must be lowercase letters, digits and single hyphens (for example 'ting-lan'), and cannot be a UUID",
+    })
+    .nullable()
+    .optional(),
   role: z.enum(AGENT_ROLES).optional().default("general"),
   title: z.string().optional().nullable(),
   icon: z.enum(AGENT_ICON_NAMES).optional().nullable(),
