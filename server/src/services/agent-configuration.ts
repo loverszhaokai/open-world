@@ -44,13 +44,14 @@ export async function prepareAgentConfiguration(db: Db, existing: AgentConfigura
     }
   }
 
-  // A rename only moves the URL key while the agent has no short name; with one
-  // set, the derived key is unreachable and cannot collide with anything.
-  if (data.name !== undefined && !nextShortName) {
-    const previousShortname = normalizeAgentUrlKey(existing.name);
-    const nextShortname = normalizeAgentUrlKey(data.name);
+  // Clearing a short name restores the derived key, even without a rename.
+  // That key may have been claimed by another agent in the meantime.
+  if (!nextShortName && (data.name !== undefined || data.shortName !== undefined)) {
+    const nextName = data.name ?? existing.name;
+    const previousShortname = normalizeAgentUrlKey(existing.shortName) ?? normalizeAgentUrlKey(existing.name);
+    const nextShortname = normalizeAgentUrlKey(nextName);
     if (previousShortname !== nextShortname) {
-      await assertCompanyShortnameAvailable(existing.companyId, data.name, { excludeAgentId: id });
+      await assertCompanyShortnameAvailable(existing.companyId, nextName, { excludeAgentId: id });
     }
   }
 
