@@ -3,12 +3,15 @@ import { Link } from "@/lib/router";
 import { StatusBadge } from "./StatusBadge";
 import { ChevronRight } from "lucide-react";
 import { cn } from "../lib/utils";
+import { sortGoalSiblings, splitGoalTitle } from "../lib/goal-order";
 import { useState } from "react";
 
 interface GoalTreeProps {
   goals: Goal[];
   goalLink?: (goal: Goal) => string;
   onSelect?: (goal: Goal) => void;
+  /** Drop the outer border when the caller already supplies a surface. */
+  bare?: boolean;
 }
 
 interface GoalNodeProps {
@@ -24,6 +27,9 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
   const [expanded, setExpanded] = useState(true);
   const hasChildren = children.length > 0;
   const link = goalLink?.(goal);
+  // Long titles get collapsed to their label in the list; the quantified tail
+  // stays visible but dimmed, and the full string is kept in the title attr.
+  const { label, detail } = splitGoalTitle(goal.title);
 
   const inner = (
     <>
@@ -46,7 +52,12 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
         <span className="w-4" />
       )}
       <span className="text-xs text-muted-foreground capitalize">{goal.level}</span>
-      <span className="flex-1 truncate">{goal.title}</span>
+      <span className="flex-1 truncate" title={goal.title}>
+        {label}
+        {detail ? (
+          <span className="ml-1.5 text-muted-foreground font-normal">{detail}</span>
+        ) : null}
+      </span>
       <StatusBadge status={goal.status} />
     </>
   );
@@ -76,7 +87,7 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
       )}
       {hasChildren && expanded && (
         <div>
-          {children.map((child) => (
+          {sortGoalSiblings(children).map((child) => (
             <GoalNode
               key={child.id}
               goal={child}
@@ -93,16 +104,16 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
   );
 }
 
-export function GoalTree({ goals, goalLink, onSelect }: GoalTreeProps) {
+export function GoalTree({ goals, goalLink, onSelect, bare = false }: GoalTreeProps) {
   const goalIds = new Set(goals.map((g) => g.id));
-  const roots = goals.filter((g) => !g.parentId || !goalIds.has(g.parentId));
+  const roots = sortGoalSiblings(goals.filter((g) => !g.parentId || !goalIds.has(g.parentId)));
 
   if (goals.length === 0) {
     return <p className="text-sm text-muted-foreground">No goals.</p>;
   }
 
   return (
-    <div className="border border-border py-1">
+    <div className={bare ? "py-1" : "border border-border py-1"}>
       {roots.map((goal) => (
         <GoalNode
           key={goal.id}

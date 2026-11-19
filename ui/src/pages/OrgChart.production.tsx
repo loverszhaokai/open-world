@@ -294,10 +294,18 @@ export function OrgChart() {
     setDragging(false);
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const container = containerRef.current;
     if (!container) return;
+
+    // Browser-standard wheel semantics: a bare wheel or two-finger trackpad
+    // swipe moves the content; only a pinch (which browsers report as a wheel
+    // event with ctrlKey set) zooms. Mirrors OrgChart.tsx.
+    if (!e.ctrlKey) {
+      setPan((current) => ({ x: current.x - e.deltaX, y: current.y - e.deltaY }));
+      return;
+    }
 
     const rect = container.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -314,6 +322,15 @@ export function OrgChart() {
     });
     setZoom(newZoom);
   }, [zoom, pan]);
+
+  // React binds onWheel passively, which silently drops preventDefault and
+  // lets the page scroll along with the chart. Bind it natively instead.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
 
   const zoomTowardPoint = useCallback((newZoom: number, point: Point) => {
     const clampedZoom = clampZoom(newZoom);
@@ -483,7 +500,6 @@ export function OrgChart() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

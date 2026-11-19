@@ -542,4 +542,69 @@ describe("TaskChatTurn", () => {
     flushSync(() => summaryBtn()!.click());
     expect(fold()?.getAttribute("data-folded")).toBe("false");
   });
+
+  it("offers the run's own account inside the expanded fold", async () => {
+    const fetchRun = () =>
+      Promise.resolve({
+        id: "run-1",
+        resultJson: {
+          summary: "Read the Gmail threads, then wrote the brief.",
+          requestedModel: "claude-opus-5",
+          usage: { totalTokens: 512830 },
+        },
+        usageJson: null,
+      } as never);
+    flushSync(() => {
+      root.render(
+        <MemoryRouter>
+          <ThemeProvider>
+            <TaskChatTurn
+              item={{ ...SETTLED, runId: "run-1" }}
+              renderChild={(c) => <span>{c.id}</span>}
+              fetchRunThinking={fetchRun}
+            />
+          </ThemeProvider>
+        </MemoryRouter>,
+      );
+    });
+
+    // Folded by default: the panel exists but reveals nothing until asked.
+    flushSync(() => summaryBtn()!.click());
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="run-thinking-toggle"]',
+    );
+    expect(toggle).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="run-thinking-summary"]'),
+    ).toBeNull();
+
+    await act(async () => {
+      toggle!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector('[data-testid="run-thinking-summary"]')
+        ?.textContent,
+    ).toContain("wrote the brief");
+    expect(
+      container.querySelector('[data-testid="run-thinking-meta"]')?.textContent,
+    ).toContain("claude-opus-5");
+  });
+
+  it("stays expandable for a settled run with no foldable transcript rows", () => {
+    renderTurn({ ...SETTLED, runId: "run-1", items: [] });
+    expect(summaryBtn()).not.toBeNull();
+    flushSync(() => summaryBtn()!.click());
+    expect(
+      container.querySelector('[data-testid="run-thinking"]'),
+    ).not.toBeNull();
+  });
+
+  it("shows no thinking panel for a turn with no run behind it", () => {
+    renderTurn(SETTLED);
+    flushSync(() => summaryBtn()!.click());
+    expect(container.querySelector('[data-testid="run-thinking"]')).toBeNull();
+  });
 });

@@ -520,6 +520,13 @@ export interface TaskChatTurnItem {
   kind: "turn";
   items: TaskChatTurnChildItem[];
   settled: boolean;
+  /**
+   * The heartbeat run this turn was built from, when the turn came from a
+   * settled run record. Lets the expanded turn offer the run's own written
+   * account of its work ("Thinking") and its token/model accounting, which
+   * live only on the full run read.
+   */
+  runId?: string;
   /** Superseded execution status is omitted; activity remains inspectable. */
   historical?: boolean;
   /** Agent identity retained when a live runner turn becomes durable history. */
