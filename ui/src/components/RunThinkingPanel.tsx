@@ -204,7 +204,7 @@ export function RunThinkingPanel({
         aria-expanded={open}
         data-testid="run-thinking-toggle"
         onClick={() => setOpen((previous) => !previous)}
-        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-accent/30 focus-visible:ring-ring focus-visible:ring-[3px]"
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-accent/30 focus-visible:ring-ring focus-visible:ring-(length:--rad-3)"
       >
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

@@ -652,7 +652,7 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
             <button
               data-org-expand-all
               type="button"
-              className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-[3px] focus-visible:outline-none sm:py-1"
+              className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-(length:--rad-3) focus-visible:outline-none sm:py-1"
               onClick={allExpanded ? collapseToTop : expandAll}
               title={allExpanded ? "Collapse to top level" : "Expand all levels"}
               aria-label={allExpanded ? "Collapse to top level" : "Expand all levels"}
@@ -787,7 +787,7 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
                         : `Expand ${node.hiddenCount} reports under ${node.name}`
                     }
                     title={isExpanded ? "Collapse reports" : `Show ${node.hiddenCount} reports`}
-                    className="absolute left-1/2 -bottom-3 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-(length:--text-nano) font-medium text-muted-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-[3px] focus-visible:outline-none"
+                    className="absolute left-1/2 -bottom-3 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-(length:--text-nano) font-medium text-muted-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-(length:--rad-3) focus-visible:outline-none"
                     onClick={(e) => {
                       // The card itself navigates to the agent; the toggle
                       // must only fold the subtree.

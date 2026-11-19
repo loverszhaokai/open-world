@@ -7,6 +7,7 @@ import { useDialogActions } from "../context/DialogContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { EntityRow } from "../components/EntityRow";
+import { MarkdownSummary } from "../components/MarkdownSummary";
 import { ProjectTile } from "../components/ProjectTile";
 import { StatusBadge } from "../components/StatusBadge";
 import { MembershipAction } from "../components/MembershipAction";
@@ -171,7 +172,7 @@ export function Projects() {
                         key={project.id}
                         leading={<ProjectTile color={project.color ?? null} icon={project.icon ?? null} size="sm" />}
                         title={project.name}
-                        subtitle={project.description ?? undefined}
+                        subtitle={project.description ? <MarkdownSummary>{project.description}</MarkdownSummary> : undefined}
                         reserveSubtitleSpace
                         to={projectUrl(project)}
                         className={state === "left" ? "group text-foreground/55" : "group"}

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "@/api/client";
 import { AssistantConnection, AssistantConnectionCard } from "./AssistantConnection";
 const mocks = vi.hoisted(() => ({ setup: vi.fn(), connections: vi.fn(), revoke: vi.fn(), breadcrumbs: vi.fn(), copy: vi.fn() }));
 vi.mock("@/hooks/usePrefersReducedMotion", () => ({ usePrefersReducedMotion: () => true }));
@@ -28,6 +29,17 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); container.remove(); vi.clearAllMocks(); });
 describe("assistant setup from Connections", () => {
+  it.each([
+    [401, "Sign in to connect an assistant"],
+    [404, "public HTTPS URL"],
+  ])("explains unavailable connection status (%s)", async (status, message) => {
+    mocks.connections.mockRejectedValue(new ApiError("unavailable", status as number, null));
+    await render(<AssistantConnectionCard onNavigate={vi.fn()} />);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(message);
+    expect(container.querySelector('[data-connected]')).toBeNull();
+    expect(container.querySelector('[aria-label="Set up Assistant Connection (MCP)"]')).toBeNull();
+  });
+
   it("copies a scoped instruction link with no credential and keeps manual configuration collapsed", async () => {
     await render();
     expect(container.querySelector("details")?.open).toBe(false);
