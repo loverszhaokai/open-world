@@ -10,6 +10,7 @@ import { Search, buildSearchUrl } from "./Search";
 
 const companyState = vi.hoisted(() => ({
   selectedCompanyId: "company-1",
+  selectedCompany: { issuePrefix: "PEN" },
 }));
 
 const breadcrumbState = vi.hoisted(() => ({
@@ -180,6 +181,14 @@ describe("Search page", () => {
 
   afterEach(() => {
     container.remove();
+  });
+
+  it("uses the current company prefix in identifier examples", async () => {
+    const { root } = renderSearch("/search", container);
+    await flush();
+    expect(container.textContent).toContain("PEN-123");
+    expect(container.textContent).not.toContain("PAP-123");
+    flushSync(() => root.unmount());
   });
 
   it("issues a search request when ?q is in the URL and renders the result", async () => {

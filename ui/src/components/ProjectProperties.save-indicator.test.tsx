@@ -38,6 +38,7 @@ vi.mock("./PathInstructionsModal", () => ({ ChoosePathButton: () => null }));
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: "project-1",
+    companyId: "company-1",
     urlKey: "project-1",
     name: "Test project",
     description: "A long description that fills the value column",
@@ -129,5 +130,33 @@ describe("ProjectProperties save indicator placement", () => {
 
     const label = labelSpan("Description");
     expect(label.nextElementSibling).toBeNull();
+  });
+});
+
+describe("ProjectProperties goal updates", () => {
+  it("forwards goalIds through the field callback and retains the draft on rejection", async () => {
+    const client = primedClient();
+    client.setQueryData(queryKeys.goals.list("company-1"), [{
+      id: "goal-1", companyId: "company-1", title: "Launch", parentId: null,
+    }]);
+    const update = vi.fn().mockRejectedValue(new Error("save failed"));
+    act(() => root.render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <ProjectProperties project={makeProject({ goalIds: ["goal-1"], goals: [{ id: "goal-1", title: "Launch" }] })}
+            onFieldUpdate={update} />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    ));
+    const click = (text: string) => act(() => Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent === text)!.click());
+    click("Edit goals");
+    click("Clear selection");
+    click("Save goals");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(update).toHaveBeenCalledWith("goals", { goalIds: [] });
+    expect(container.textContent).toContain("Could not save goals");
+    expect(container.querySelector('input[type="checkbox"]')).not.toBeNull();
+    client.clear();
   });
 });

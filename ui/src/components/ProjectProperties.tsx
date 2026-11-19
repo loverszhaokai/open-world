@@ -26,14 +26,15 @@ import { InlineEditor } from "./InlineEditor";
 import { EnvironmentVariablesEditor } from "./environment-variables-editor";
 import { Badge } from "@/components/ui/badge";
 import { ProjectAccessMembers } from "./ProjectAccessMembers";
+import { ProjectGoalsField } from "./ProjectGoalsField";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 
 interface ProjectPropertiesProps {
   project: Project;
   repositories?: ReactNode;
-  onUpdate?: (data: Record<string, unknown>) => void;
-  onFieldUpdate?: (field: ProjectConfigFieldKey, data: Record<string, unknown>) => void;
+  onUpdate?: (data: Record<string, unknown>) => void | Promise<unknown>;
+  onFieldUpdate?: (field: ProjectConfigFieldKey, data: Record<string, unknown>) => void | Promise<unknown>;
   getFieldSaveState?: (field: ProjectConfigFieldKey) => ProjectFieldSaveState;
   onArchive?: (archived: boolean) => void;
   archivePending?: boolean;
@@ -228,10 +229,9 @@ export function ProjectProperties({ project, repositories, onUpdate, onFieldUpda
 
   const commitField = (field: ProjectConfigFieldKey, data: Record<string, unknown>) => {
     if (onFieldUpdate) {
-      onFieldUpdate(field, data);
-      return;
+      return onFieldUpdate(field, data);
     }
-    onUpdate?.(data);
+    return onUpdate?.(data);
   };
   const fieldState = (field: ProjectConfigFieldKey): ProjectFieldSaveState => getFieldSaveState?.(field) ?? "idle";
 
@@ -508,6 +508,15 @@ export function ProjectProperties({ project, repositories, onUpdate, onFieldUpda
             </p>
             {project.visibility === "private" ? <ProjectAccessMembers project={project} canManage={canManagePrivacy} /> : null}
           </div>
+        </PropertyRow>
+        <PropertyRow label={<FieldLabel label="Goals" state={fieldState("goals")} />} alignStart>
+          <ProjectGoalsField
+            key={project.id}
+            project={project}
+            onSave={onUpdate || onFieldUpdate
+              ? (goalIds) => commitField("goals", { goalIds })
+              : undefined}
+          />
         </PropertyRow>
         {repositories ?? <ProjectRepositories key={project.id} project={project} />}
         <PropertyRow

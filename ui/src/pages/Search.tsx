@@ -759,6 +759,8 @@ function SearchTabContent({
   isFetching,
   agentsById,
 }: SearchTabContentProps) {
+  const { selectedCompany } = useCompany();
+  const exampleIdentifier = `${selectedCompany?.issuePrefix ?? "TASK"}-123`;
   if (showInitialState) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-10 sm:px-6">
@@ -792,7 +794,7 @@ function SearchTabContent({
         <ul className="space-y-1 text-xs text-muted-foreground">
           <li>
             <span className="font-medium text-foreground">Identifier lookup:</span> type{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-(length:--text-micro)">PAP-123</code> to jump straight to a task.
+            <code className="rounded bg-muted px-1 py-0.5 text-(length:--text-micro)">{exampleIdentifier}</code> to jump straight to a task.
           </li>
           <li>
             <span className="font-medium text-foreground">Quoted phrases:</span> wrap a phrase in quotes to match the
@@ -882,7 +884,7 @@ function SearchTabContent({
         <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
           <li>Try fewer tokens or a single distinctive term.</li>
           <li>
-            Use an identifier shortcut like <code className="rounded bg-muted px-1 py-0.5">PAP-123</code>.
+            Use an identifier shortcut like <code className="rounded bg-muted px-1 py-0.5">{exampleIdentifier}</code>.
           </li>
           <li>Wrap multi-word phrases in quotes.</li>
         </ul>

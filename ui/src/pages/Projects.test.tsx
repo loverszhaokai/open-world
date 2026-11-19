@@ -185,6 +185,17 @@ describe("Projects", () => {
     await flushReact();
   }
 
+  it("renders Markdown descriptions without nested links or raw HTML", async () => {
+    mockProjectsApi.list.mockResolvedValue([makeProject({
+      description: "**Launch** [plan](https://example.com) <img src=x onerror=alert(1)>",
+    })]);
+    await renderProjects();
+    expect(container.textContent).toContain("Launch plan");
+    expect(container.textContent).not.toContain("**Launch**");
+    expect(container.querySelector("a a")).toBeNull();
+    expect(container.querySelector('img[src="x"]')).toBeNull();
+  });
+
   async function openSortMenu() {
     const trigger = container.querySelector<HTMLButtonElement>('button[title="Sort"]');
     expect(trigger).not.toBeNull();

@@ -514,7 +514,7 @@ function OrgTreeNode({
           {/* Name floor + `truncate` keeps the primary identifier readable; the
               cluster wraps to a second line under pressure instead of starving
               the name at narrow widths. */}
-          <div className="min-w-(--sz-7rem) truncate">
+          <div className="min-w-(--sz-7rem) max-w-full truncate">
             <span className="text-sm font-medium">{node.name}</span>
             <span className="text-xs text-muted-foreground ml-2">
               {roleLabels[node.role] ?? node.role}

@@ -53,7 +53,7 @@ export function AssistantConnectionCard({ onNavigate }: { onNavigate: (href: str
     </div>
     {connections.isPending && <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">Checking your connection status…</p>}
     {connections.isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
-      <p className="text-xs text-destructive">Couldn’t load your connection status.</p>
+      <p className="text-xs text-destructive">{connectionError(connections.error)}</p>
       <Button size="sm" variant="ghost" disabled={connections.isFetching} onClick={() => void connections.refetch()}>Try again</Button>
     </div>}
     {connections.isSuccess && active.length > 0 && <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 text-sm">
@@ -77,6 +77,11 @@ function CopyValue({ value, label }: { value: string; label: string }) {
     </div>
     <p role="status" className="text-xs text-muted-foreground">{error ? "Couldn’t copy. Select and copy the text above." : copied ? "Copied" : null}</p>
   </div>;
+}
+
+function connectionError(error: Error | null): string {
+  if (error instanceof ApiError && (error.status === 401 || error.status === 404)) return setupError(error);
+  return "Couldn’t load your connection status.";
 }
 
 function setupError(error: Error): string {
