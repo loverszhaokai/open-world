@@ -296,3 +296,449 @@ describe("OrgChart mobile gestures", () => {
     expect(container.textContent).toContain("Export organization");
   });
 });
+
+describe("OrgChart collapsing", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+  let queryClient: QueryClient;
+
+  /**
+   * A CEO over two deputies that each carry a team — the shape that makes the
+   * all-levels chart unusable and the reason it now opens collapsed.
+   */
+  const deepOrg = [
+    {
+      id: "ceo",
+      name: "CEO",
+      role: "ceo",
+      status: "active",
+      reports: [
+        {
+          id: "cao",
+          name: "CAO",
+          role: "manager",
+          status: "active",
+          reports: [
+            { id: "dev-1", name: "Dev One", role: "engineer", status: "active", reports: [] },
+            {
+              id: "lead",
+              name: "Lead",
+              role: "manager",
+              status: "active",
+              reports: [
+                { id: "dev-2", name: "Dev Two", role: "engineer", status: "active", reports: [] },
+              ],
+            },
+          ],
+        },
+        {
+          id: "coo",
+          name: "COO",
+          role: "manager",
+          status: "active",
+          reports: [{ id: "ops-1", name: "Ops One", role: "engineer", status: "active", reports: [] }],
+        },
+      ],
+    },
+  ];
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    orgMock.mockResolvedValue(deepOrg);
+    listMock.mockResolvedValue([]);
+  });
+
+  afterEach(async () => {
+    if (root) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+    container.remove();
+    document.body.innerHTML = "";
+    vi.clearAllMocks();
+  });
+
+  async function render() {
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <OrgChart />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+  }
+
+  function cardNames() {
+    return Array.from(container.querySelectorAll("[data-org-card]")).map(
+      (card) => card.querySelector("[data-org-card-name]")?.textContent,
+    );
+  }
+
+  /**
+   * Cards are absolutely positioned siblings, so a card's own name element is
+   * the only reliable way to pick one out — its `textContent` says nothing
+   * about its reports.
+   */
+  function cardFor(name: string) {
+    return Array.from(container.querySelectorAll("[data-org-card]")).find(
+      (card) => card.querySelector("[data-org-card-name]")?.textContent === name,
+    );
+  }
+
+  function toggleFor(name: string) {
+    return (cardFor(name)?.querySelector("[data-org-toggle]") ?? null) as HTMLButtonElement | null;
+  }
+
+  it("renders only the top two levels by default", async () => {
+    await render();
+
+    expect(cardNames()).toEqual(["CEO", "CAO", "COO"]);
+  });
+
+  it("does not render collapsed descendants at all", async () => {
+    await render();
+
+    // Not merely hidden — a collapsed subtree is pruned before layout so it
+    // costs no horizontal space.
+    expect(container.textContent).not.toContain("Dev One");
+    expect(container.textContent).not.toContain("Ops One");
+  });
+
+  it("labels a collapsed toggle with the number of hidden descendants", async () => {
+    await render();
+
+    // CAO hides dev-1, lead and dev-2.
+    expect(toggleFor("CAO")?.textContent).toContain("3");
+    expect(toggleFor("COO")?.textContent).toContain("1");
+  });
+
+  it("gives the collapsed toggle an accessible expand label", async () => {
+    await render();
+
+    expect(toggleFor("CAO")?.getAttribute("aria-label")).toBe("Expand 3 reports under CAO");
+    expect(toggleFor("CAO")?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("reveals one more level when a collapsed node is clicked", async () => {
+    await render();
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+
+    expect(cardNames()).toContain("Dev One");
+    expect(cardNames()).toContain("Lead");
+    // Still one level at a time: Lead's own report stays folded.
+    expect(cardNames()).not.toContain("Dev Two");
+  });
+
+  it("collapses an expanded node back down", async () => {
+    await render();
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+    expect(cardNames()).toContain("Dev One");
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+    expect(cardNames()).not.toContain("Dev One");
+  });
+
+  it("does not navigate when the toggle is clicked", async () => {
+    await render();
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+
+    // The toggle lives inside a card whose click navigates to the agent.
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("still navigates when the card body is clicked", async () => {
+    await render();
+    const card = container.querySelector("[data-org-card]") as HTMLDivElement;
+
+    await act(async () => {
+      card.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+
+    expect(navigateMock).toHaveBeenCalledWith("/agents/ceo");
+  });
+
+  it("omits the toggle on a leaf card", async () => {
+    await render();
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+
+    expect(cardFor("Dev One")).toBeDefined();
+    expect(toggleFor("Dev One")).toBeNull();
+  });
+
+  it("expands every level through the Expand all control", async () => {
+    await render();
+
+    await act(async () => {
+      (container.querySelector("[data-org-expand-all]") as HTMLButtonElement).click();
+    });
+
+    expect(cardNames()).toEqual(["CEO", "CAO", "Dev One", "Lead", "Dev Two", "COO", "Ops One"]);
+  });
+
+  it("offers Collapse all once everything is expanded, and returns to the top level", async () => {
+    await render();
+    const control = () => container.querySelector("[data-org-expand-all]") as HTMLButtonElement;
+
+    await act(async () => {
+      control().click();
+    });
+    expect(control().textContent).toContain("Collapse all");
+
+    await act(async () => {
+      control().click();
+    });
+    expect(cardNames()).toEqual(["CEO", "CAO", "COO"]);
+  });
+
+  it("keeps the expansion when the chart refetches the same tree", async () => {
+    await render();
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+    expect(cardNames()).toContain("Dev One");
+
+    // A refetch hands back an equal-but-new tree object; the user's open
+    // branch must survive it rather than snapping back to the top level.
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await flushReact();
+
+    expect(cardNames()).toContain("Dev One");
+  });
+
+  it("re-fits the viewport after Expand all so the new chart is visible", async () => {
+    await render();
+    const layer = container.querySelector('[data-testid="org-chart-card-layer"]') as HTMLDivElement;
+    const before = layer.style.transform;
+
+    await act(async () => {
+      (container.querySelector("[data-org-expand-all]") as HTMLButtonElement).click();
+    });
+
+    // Expanding everything makes the chart much wider; leaving the viewport
+    // where it was would strand the user on an empty corner.
+    expect(layer.style.transform).not.toBe(before);
+  });
+
+  it("leaves the viewport alone when a single node is toggled", async () => {
+    await render();
+    const layer = container.querySelector('[data-testid="org-chart-card-layer"]') as HTMLDivElement;
+    const before = layer.style.transform;
+
+    await act(async () => {
+      toggleFor("CAO")!.click();
+    });
+
+    // A local edit must not move the chart under the user's cursor.
+    expect(layer.style.transform).toBe(before);
+  });
+
+  it("shows an expanded node's toggle without a count", async () => {
+    await render();
+
+    // The root is expanded by default, so its toggle is a plain collapse
+    // affordance rather than a promise of N hidden people.
+    const ceoToggle = toggleFor("CEO")!;
+    expect(ceoToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(ceoToggle.textContent).toBe("");
+  });
+});
+
+describe("OrgChart wheel interaction", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+  let queryClient: QueryClient;
+  const viewportWidth = 800;
+  const viewportHeight = 600;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    orgMock.mockResolvedValue(orgTree);
+    listMock.mockResolvedValue(agents);
+
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return this.getAttribute("data-testid") === "org-chart-viewport" ? viewportWidth : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return this.getAttribute("data-testid") === "org-chart-viewport" ? viewportHeight : 0;
+      },
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getRect(this: HTMLElement) {
+      const isViewport = this.getAttribute("data-testid") === "org-chart-viewport";
+      const width = isViewport ? viewportWidth : 0;
+      const height = isViewport ? viewportHeight : 0;
+      return {
+        x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height,
+        toJSON: () => ({}),
+      };
+    });
+  });
+
+  afterEach(async () => {
+    if (root) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+    container.remove();
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  async function renderChart() {
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <OrgChart />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+    return {
+      viewport: container.querySelector('[data-testid="org-chart-viewport"]') as HTMLDivElement,
+      layer: container.querySelector('[data-testid="org-chart-card-layer"]') as HTMLDivElement,
+    };
+  }
+
+  /** Parse the card layer's transform into pan + zoom. */
+  function readTransform(layer: HTMLDivElement) {
+    const match = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(
+      layer.style.transform,
+    );
+    if (!match) throw new Error(`unexpected transform: ${layer.style.transform}`);
+    return { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) };
+  }
+
+  function wheel(viewport: HTMLDivElement, init: WheelEventInit) {
+    viewport.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init }),
+    );
+  }
+
+  it("pans the content on a plain wheel, leaving zoom untouched", async () => {
+    const { viewport, layer } = await renderChart();
+    const before = readTransform(layer);
+
+    await act(async () => {
+      wheel(viewport, { deltaY: 120 });
+    });
+
+    const after = readTransform(layer);
+    // Scrolling down moves the content up, like a scrolling page.
+    expect(after.y).toBe(before.y - 120);
+    expect(after.zoom).toBe(before.zoom);
+  });
+
+  it("pans horizontally on a two-finger sideways swipe", async () => {
+    const { viewport, layer } = await renderChart();
+    const before = readTransform(layer);
+
+    await act(async () => {
+      wheel(viewport, { deltaX: 40 });
+    });
+
+    const after = readTransform(layer);
+    expect(after.x).toBe(before.x - 40);
+    expect(after.y).toBe(before.y);
+    expect(after.zoom).toBe(before.zoom);
+  });
+
+  it("accumulates the fractional deltas a trackpad emits", async () => {
+    const { viewport, layer } = await renderChart();
+    const before = readTransform(layer);
+
+    // A trackpad swipe arrives as a burst of small continuous deltas.
+    await act(async () => {
+      wheel(viewport, { deltaY: 3.5 });
+      wheel(viewport, { deltaY: 3.5 });
+      wheel(viewport, { deltaY: 3 });
+    });
+
+    expect(readTransform(layer).y).toBe(before.y - 10);
+  });
+
+  it("zooms only when ctrlKey marks the event as a pinch", async () => {
+    const { viewport, layer } = await renderChart();
+    const before = readTransform(layer);
+
+    await act(async () => {
+      wheel(viewport, { deltaY: -100, ctrlKey: true, clientX: 400, clientY: 300 });
+    });
+
+    expect(readTransform(layer).zoom).toBeGreaterThan(before.zoom);
+  });
+
+  it("zooms out on a pinch-in", async () => {
+    const { viewport, layer } = await renderChart();
+    const before = readTransform(layer);
+
+    await act(async () => {
+      wheel(viewport, { deltaY: 100, ctrlKey: true, clientX: 400, clientY: 300 });
+    });
+
+    expect(readTransform(layer).zoom).toBeLessThan(before.zoom);
+  });
+
+  it("zooms toward the pointer, not the viewport origin", async () => {
+    const { viewport, layer } = await renderChart();
+    const before = readTransform(layer);
+    const pointer = { clientX: 200, clientY: 150 };
+
+    await act(async () => {
+      wheel(viewport, { deltaY: -100, ctrlKey: true, ...pointer });
+    });
+
+    const after = readTransform(layer);
+    const scale = after.zoom / before.zoom;
+    // The point under the cursor stays put across the zoom.
+    expect(after.x).toBeCloseTo(pointer.clientX - scale * (pointer.clientX - before.x), 5);
+    expect(after.y).toBeCloseTo(pointer.clientY - scale * (pointer.clientY - before.y), 5);
+  });
+
+  it("prevents the page from scrolling in both modes", async () => {
+    const { viewport } = await renderChart();
+
+    const pan = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 120 });
+    const pinch = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 120, ctrlKey: true });
+
+    await act(async () => {
+      viewport.dispatchEvent(pan);
+      viewport.dispatchEvent(pinch);
+    });
+
+    expect(pan.defaultPrevented).toBe(true);
+    expect(pinch.defaultPrevented).toBe(true);
+  });
+});

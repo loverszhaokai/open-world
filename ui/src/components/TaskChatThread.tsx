@@ -1827,6 +1827,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
               id: turnId,
               kind: "turn",
               settled: true,
+              runId: source.id,
               historical,
               agentName:
                 meta?.agentName ??
@@ -2013,6 +2014,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
             id: turnId,
             kind: "turn",
             settled: true,
+            runId: source.id,
             historical,
             agentName:
               meta?.agentName ??
@@ -2106,6 +2108,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
               id: turnId,
               kind: "turn",
               settled: true,
+              runId: liveRun.id,
               agentName:
                 liveRun.agentName ??
                 (liveRun.agentId

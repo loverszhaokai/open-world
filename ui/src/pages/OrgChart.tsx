@@ -6,15 +6,24 @@ import { agentsApi, type OrgNode } from "../api/agents";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
-import { agentUrl } from "../lib/utils";
+import { agentUrl, cn } from "../lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
-import { Download, Maximize2, Minus, Network, Plus, Upload } from "lucide-react";
+import { ChevronDown, Download, Maximize2, Minus, Network, Plus, Upload } from "lucide-react";
 import { AGENT_ROLE_LABELS, type Agent } from "@paperclipai/shared";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
+import {
+  allParentIds,
+  defaultExpandedIds,
+  descendantCount,
+  pruneCollapsed,
+  reconcileExpandedIds,
+  toggleExpanded,
+  type ExpandedIds,
+} from "@/lib/org-collapse";
 
 // Layout constants
 const CARD_W = 200;
@@ -37,6 +46,8 @@ interface LayoutNode {
   x: number;
   y: number;
   children: LayoutNode[];
+  /** Descendants folded away under this card, 0 when it is a leaf or expanded. */
+  hiddenCount: number;
 }
 
 interface Point {
@@ -64,8 +75,19 @@ function subtreeWidth(node: OrgNode): number {
   return Math.max(CARD_W, childrenW + gaps);
 }
 
-/** Recursively assign x,y positions. */
-function layoutTree(node: OrgNode, x: number, y: number): LayoutNode {
+/**
+ * Recursively assign x,y positions.
+ *
+ * `hiddenCounts` maps a node id to the number of descendants collapse removed
+ * from the tree being laid out. The layout itself only ever sees the pruned
+ * tree, so the count has to be supplied from the unpruned one.
+ */
+function layoutTree(
+  node: OrgNode,
+  x: number,
+  y: number,
+  hiddenCounts: ReadonlyMap<string, number>,
+): LayoutNode {
   const totalW = subtreeWidth(node);
   const layoutChildren: LayoutNode[] = [];
 
@@ -76,7 +98,7 @@ function layoutTree(node: OrgNode, x: number, y: number): LayoutNode {
 
     for (const child of node.reports) {
       const cw = subtreeWidth(child);
-      layoutChildren.push(layoutTree(child, cx, y + CARD_H + GAP_Y));
+      layoutChildren.push(layoutTree(child, cx, y + CARD_H + GAP_Y, hiddenCounts));
       cx += cw + GAP_X;
     }
   }
@@ -89,22 +111,24 @@ function layoutTree(node: OrgNode, x: number, y: number): LayoutNode {
     x: x + (totalW - CARD_W) / 2,
     y,
     children: layoutChildren,
+    hiddenCount: hiddenCounts.get(node.id) ?? 0,
   };
 }
 
 /** Layout all root nodes side by side. */
-function layoutForest(roots: OrgNode[]): LayoutNode[] {
+function layoutForest(
+  roots: OrgNode[],
+  hiddenCounts: ReadonlyMap<string, number> = new Map(),
+): LayoutNode[] {
   if (roots.length === 0) return [];
 
-  const totalW = roots.reduce((sum, r) => sum + subtreeWidth(r), 0);
-  const gaps = (roots.length - 1) * GAP_X;
   let x = PADDING;
   const y = PADDING;
 
   const result: LayoutNode[] = [];
   for (const root of roots) {
     const w = subtreeWidth(root);
-    result.push(layoutTree(root, x, y));
+    result.push(layoutTree(root, x, y, hiddenCounts));
     x += w + GAP_X;
   }
 
@@ -241,8 +265,71 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
     if (!embedded) setBreadcrumbs([{ label: "Org Chart" }]);
   }, [embedded, setBreadcrumbs]);
 
-  // Layout computation
-  const layout = useMemo(() => layoutForest(orgTree ?? []), [orgTree]);
+  // ── Collapse state ───────────────────────────────────────────────────
+  // A 50-agent org with two 15-report deputies cannot fit on screen, so the
+  // chart opens at the top two levels and folds the rest behind per-card
+  // toggles. `null` means "not chosen yet" and resolves to the default once a
+  // tree arrives; after that the user's expansion survives refetches and
+  // navigating away and back (React state in this component's lifetime).
+  const [expandedIds, setExpandedIds] = useState<ExpandedIds | null>(null);
+
+  // Reconciling on every tree keeps deleted or filtered-out agents from
+  // holding stale ids, and seeds the default on first load.
+  const expanded = useMemo(
+    () => reconcileExpandedIds(orgTree ?? [], expandedIds),
+    [orgTree, expandedIds],
+  );
+
+  const visibleTree = useMemo(() => pruneCollapsed(orgTree ?? [], expanded), [orgTree, expanded]);
+
+  // Counts come from the unpruned tree: a collapsed card advertises how many
+  // people it hides, which the pruned tree no longer knows.
+  const hiddenCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    function walk(node: OrgNode) {
+      if (!expanded.has(node.id)) counts.set(node.id, descendantCount(node));
+      node.reports.forEach(walk);
+    }
+    (orgTree ?? []).forEach(walk);
+    return counts;
+  }, [orgTree, expanded]);
+
+  const parentIds = useMemo(() => allParentIds(orgTree ?? []), [orgTree]);
+  const allExpanded = parentIds.size > 0 && parentIds.size === expanded.size;
+
+  // Toggling before the user has touched anything must build on the resolved
+  // default, not on an empty set — otherwise the first click also folds away
+  // the top level that the default had expanded.
+  const toggleNode = useCallback(
+    (id: string) => {
+      setExpandedIds((current) =>
+        toggleExpanded(current ? reconcileExpandedIds(orgTree ?? [], current) : expanded, id),
+      );
+    },
+    [orgTree, expanded],
+  );
+
+  // Expand/collapse all restructures the whole chart, so it re-fits the
+  // viewport afterwards — otherwise the user is left staring at whichever
+  // corner they happened to be on. Per-node toggles deliberately do NOT
+  // re-fit: those are local edits and moving the viewport under the user
+  // loses their place. The new bounds only exist after the next render, so
+  // the fit is deferred to the effect below via this flag.
+  const refitAfterLayout = useRef(false);
+
+  const expandAll = useCallback(() => {
+    refitAfterLayout.current = true;
+    setExpandedIds(parentIds);
+  }, [parentIds]);
+
+  const collapseToTop = useCallback(() => {
+    refitAfterLayout.current = true;
+    setExpandedIds(defaultExpandedIds(orgTree ?? []));
+  }, [orgTree]);
+
+  // Layout computation — over the pruned tree, so a collapsed subtree costs
+  // no horizontal space and its siblings close ranks.
+  const layout = useMemo(() => layoutForest(visibleTree, hiddenCounts), [visibleTree, hiddenCounts]);
   const allNodes = useMemo(() => flattenLayout(layout), [layout]);
   const edges = useMemo(() => collectEdges(layout), [layout]);
 
@@ -290,11 +377,15 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
   }, [orgTree]);
 
   useEffect(() => {
-    if (hasInitialized.current || allNodes.length === 0 || !containerRef.current) return;
+    const refitting = refitAfterLayout.current;
+    if ((hasInitialized.current && !refitting) || allNodes.length === 0 || !containerRef.current) {
+      return;
+    }
     const container = containerRef.current;
     const fitted = fitChartToViewport(container.clientWidth, container.clientHeight, bounds);
     if (!fitted) return;
 
+    refitAfterLayout.current = false;
     hasInitialized.current = true;
     setZoom(fitted.zoom);
     setPan(fitted.pan);
@@ -320,10 +411,23 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
     setDragging(false);
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const container = containerRef.current;
     if (!container) return;
+
+    // Browser-standard wheel semantics: a bare wheel or two-finger trackpad
+    // swipe moves the content, exactly like scrolling a page. Only a pinch
+    // gesture zooms, and browsers signal a pinch by setting ctrlKey on a
+    // synthetic wheel event (macOS trackpad pinch, and Ctrl+wheel). Treating
+    // every deltaY as zoom made the chart impossible to scroll past.
+    if (!e.ctrlKey) {
+      // Deltas are already in viewport pixels, so they apply to the pan
+      // offset directly — scaling them by the zoom level would make the
+      // chart drift faster or slower than the fingers.
+      setPan((current) => ({ x: current.x - e.deltaX, y: current.y - e.deltaY }));
+      return;
+    }
 
     const rect = container.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -340,6 +444,16 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
     });
     setZoom(newZoom);
   }, [zoom, pan]);
+
+  // React binds onWheel passively, which silently drops preventDefault and
+  // lets the page scroll along with the chart. Bind it natively instead so
+  // both panning and pinch-zooming actually own the gesture.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
 
   const zoomTowardPoint = useCallback((newZoom: number, point: Point) => {
     const clampedZoom = clampZoom(newZoom);
@@ -515,12 +629,31 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
       >
+        {/* Expand / collapse all — only earns its place once something is
+            actually foldable. */}
+        {parentIds.size > 0 && (
+          <div className="absolute top-3 left-3 z-10">
+            <button
+              data-org-expand-all
+              type="button"
+              className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-[3px] focus-visible:outline-none sm:py-1"
+              onClick={allExpanded ? collapseToTop : expandAll}
+              title={allExpanded ? "Collapse to top level" : "Expand all levels"}
+              aria-label={allExpanded ? "Collapse to top level" : "Expand all levels"}
+            >
+              <ChevronDown
+                className={cn("h-3.5 w-3.5 transition-transform duration-150", allExpanded && "rotate-180")}
+              />
+              {allExpanded ? "Collapse all" : "Expand all"}
+            </button>
+          </div>
+        )}
+
         {/* Zoom controls */}
         <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
           <button
@@ -606,6 +739,10 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
           {allNodes.map((node) => {
             const agent = agentMap.get(node.id);
             const dotColor = statusDotColor[node.status] ?? defaultDotColor;
+            // A card is expandable when it still has reports in the full tree:
+            // either they are drawn below it, or collapse is hiding them.
+            const isExpanded = expanded.has(node.id);
+            const expandable = isExpanded ? node.children.length > 0 : node.hiddenCount > 0;
 
             return (
               <Card
@@ -626,6 +763,37 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
                   e.stopPropagation();
                 }}
               >
+                {expandable && (
+                  // Straddles the bottom edge, where the connector to the
+                  // reports leaves the card, so it reads as "what is below".
+                  <button
+                    data-org-toggle
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={
+                      isExpanded
+                        ? `Collapse reports under ${node.name}`
+                        : `Expand ${node.hiddenCount} reports under ${node.name}`
+                    }
+                    title={isExpanded ? "Collapse reports" : `Show ${node.hiddenCount} reports`}
+                    className="absolute left-1/2 -bottom-3 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-(length:--text-nano) font-medium text-muted-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-[3px] focus-visible:outline-none"
+                    onClick={(e) => {
+                      // The card itself navigates to the agent; the toggle
+                      // must only fold the subtree.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleNode(node.id);
+                    }}
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "h-3 w-3 transition-transform duration-150",
+                        isExpanded && "rotate-180",
+                      )}
+                    />
+                    {!isExpanded && <span className="tabular-nums">{node.hiddenCount}</span>}
+                  </button>
+                )}
                 <div className="flex items-center px-4 py-3 gap-3">
                   {/* Agent icon + status dot */}
                   <div className="relative shrink-0">
@@ -639,7 +807,10 @@ export function OrgChart({ orgTree: providedOrgTree, agents: providedAgents, emb
                   </div>
                   {/* Name + role + adapter type */}
                   <div className="flex flex-col items-start min-w-0 flex-1">
-                    <span className="text-sm font-semibold text-foreground leading-tight">
+                    <span
+                      data-org-card-name
+                      className="text-sm font-semibold text-foreground leading-tight"
+                    >
                       {node.name}
                     </span>
                     <span className="text-(length:--text-micro) text-muted-foreground leading-tight mt-0.5">

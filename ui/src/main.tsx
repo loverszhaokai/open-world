@@ -1,3 +1,7 @@
+// Must come first: installs crypto.randomUUID when the page is served over
+// plain HTTP (non-secure context), where browsers omit it. Several components
+// call it during module init / first render. Local dev only — see the file.
+import "./lib/crypto-uuid-polyfill";
 import { VoiceCallProvider } from "./components/voice/VoiceCallProvider";
 import { useAccountIdentity } from "./api/companies-query";
 import * as React from "react";

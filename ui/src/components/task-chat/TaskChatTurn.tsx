@@ -9,6 +9,10 @@ import type {
 } from "./task-chat-model";
 import { TaskChatStatusPill } from "./TaskChatStatusPill";
 import { TaskChatAgentIdentity } from "./TaskChatBubble";
+import {
+  RunThinkingPanel,
+  type RunThinkingFetcher,
+} from "@/components/RunThinkingPanel";
 
 interface TaskChatTurnProps {
   item: TaskChatTurnItem;
@@ -25,6 +29,11 @@ interface TaskChatTurnProps {
    * stable right edge, outside the expandable fold.
    */
   leading?: ReactNode;
+  /**
+   * Injectable run-detail reader for the expanded turn's "Thinking"
+   * disclosure. Defaults to the real API call; tests pass a stub.
+   */
+  fetchRunThinking?: RunThinkingFetcher;
 }
 
 /** Metric segments after the label: "38s · 3 tools · +34 −3 · 12.3k tokens". */
@@ -74,6 +83,7 @@ export function TaskChatTurn({
   renderChild,
   timestampPrefix,
   leading,
+  fetchRunThinking,
 }: TaskChatTurnProps) {
   const streamlined = useStreamlinedTaskChatPresentation();
   const parentRow = !item.settled && item.liveStatus != null;
@@ -175,7 +185,11 @@ export function TaskChatTurn({
     if (item.settled && !wasParentRow) setOpen(false);
   }
 
-  const expandable = foldedItems.length > 0;
+  // A settled run always has something to reveal — at minimum its own written
+  // account of the work ("Thinking") — so it stays expandable even when the
+  // transcript produced no foldable tool/reasoning rows.
+  const showThinking = item.settled && Boolean(item.runId);
+  const expandable = foldedItems.length > 0 || showThinking;
   const folded = (item.settled || parentRow) && !open;
   const SummaryIcon = item.summary.failed ? X : Check;
 
@@ -274,6 +288,12 @@ export function TaskChatTurn({
       >
         <div>
           <div className="flex flex-col gap-2 pt-1">
+            {showThinking && historyMounted ? (
+              <RunThinkingPanel
+                runId={item.runId!}
+                fetchRun={fetchRunThinking}
+              />
+            ) : null}
             {historyMounted && foldedItems.map((child) => (
               <div key={child.id}>{renderChild(child)}</div>
             ))}

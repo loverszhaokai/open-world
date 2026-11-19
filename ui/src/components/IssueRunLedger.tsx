@@ -28,6 +28,7 @@ import { readSourceResolvedWatchdogFold } from "../lib/source-resolved-watchdog-
 import { SourceResolvedFoldBadge } from "./SourceResolvedFoldBadge";
 import { ResponsibleUserDenialNotice } from "./ResponsibleUserDenialNotice";
 import { RunnerInspector } from "./RunnerInspector";
+import { RunThinkingPanel, type RunThinkingFetcher } from "./RunThinkingPanel";
 import { agentsApi } from "../api/agents";
 import {
   ProviderTraceStatusBadge,
@@ -62,6 +63,12 @@ type IssueRunLedgerContentProps = {
   onWatchdogDecision?: (input: WatchdogDecisionInput) => void;
   onRerunWithTrace?: (run: RunForIssue) => void;
   providerTraceMetadata?: ReadonlyMap<string, ProviderTraceMetadata>;
+  /**
+   * Injectable run-detail reader for the per-run "Thinking" disclosure.
+   * Defaults to the real `GET /heartbeat-runs/:runId` call; tests and
+   * storybook pass a stub so the ledger renders without a query client.
+   */
+  fetchRunThinking?: RunThinkingFetcher;
 };
 
 type LedgerRun = RunForIssue & {
@@ -605,6 +612,7 @@ export function IssueRunLedgerContent({
   onWatchdogDecision,
   onRerunWithTrace,
   providerTraceMetadata = new Map(),
+  fetchRunThinking,
 }: IssueRunLedgerContentProps) {
   const [inspectedRun, setInspectedRun] = useState<LedgerRun | null>(null);
   const ledgerRuns = useMemo(
@@ -1011,6 +1019,15 @@ export function IssueRunLedgerContent({
                     </span>
                   </div>
                 ) : null}
+
+                {run.isLive ? null : (
+                  <RunThinkingPanel
+                    runId={run.runId}
+                    error={run.error}
+                    errorCode={run.errorCode}
+                    fetchRun={fetchRunThinking}
+                  />
+                )}
               </article>
             );
           })}
