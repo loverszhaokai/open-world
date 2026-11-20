@@ -25,11 +25,11 @@ describe("agent update schema", () => {
 });
 
 describe("agent shortName validation", () => {
-  it.each(["nihongo", "hai-tang", "tou-shou-1", "ceo"])("accepts %s", shortName => {
+  it.each(["nihongo", "ni-hongo", "pitcher-1", "ceo"])("accepts %s", shortName => {
     expect(updateAgentSchema.parse({ shortName })).toEqual({ shortName });
   });
 
-  it.each(["Nihongo", "ting lan", "日本語", "ting_lan", "-ting", "ting--lan"])(
+  it.each(["Nihongo", "ni hongo", "日本語", "ni_hongo", "-ni", "ni--hongo"])(
     "rejects %s, which would not survive normalization",
     shortName => {
       const result = updateAgentSchema.safeParse({ shortName });

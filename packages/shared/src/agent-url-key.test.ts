@@ -13,9 +13,9 @@ describe("resolveAgentUrlKey", () => {
     expect(resolveAgentUrlKey({ id: ID, name: "Head of Paid Growth", shortName: "hopg" })).toBe("hopg");
   });
 
-  it("gives a Chinese-named agent a usable key instead of a bare UUID", () => {
-    // The 28 agents this feature exists for: the name normalizes to nothing,
-    // so before `shortName` they were addressable only by UUID.
+  it("gives a non-Latin-named agent a usable key instead of a bare UUID", () => {
+    // The case this feature exists for: the name normalizes to nothing, so
+    // before `shortName` such an agent was addressable only by UUID.
     expect(resolveAgentUrlKey({ id: ID, name: "日本語" })).toBe(ID);
     expect(resolveAgentUrlKey({ id: ID, name: "日本語", shortName: "nihongo" })).toBe("nihongo");
   });
@@ -23,7 +23,7 @@ describe("resolveAgentUrlKey", () => {
   it("keeps the key stable across a rename", () => {
     // The whole point of storing it: saved links and scripts keep working.
     const before = resolveAgentUrlKey({ id: ID, name: "日本語", shortName: "nihongo" });
-    const after = resolveAgentUrlKey({ id: ID, name: "Listening Wave", shortName: "nihongo" });
+    const after = resolveAgentUrlKey({ id: ID, name: "Renamed Agent", shortName: "nihongo" });
     expect(after).toBe(before);
   });
 
@@ -37,7 +37,7 @@ describe("resolveAgentUrlKey", () => {
   });
 
   it("normalizes a short name that was stored unnormalized", () => {
-    expect(resolveAgentUrlKey({ id: ID, name: "x", shortName: "  Ting Lan  " })).toBe("nihongo");
+    expect(resolveAgentUrlKey({ id: ID, name: "x", shortName: "  Ni Hongo  " })).toBe("ni-hongo");
   });
 
   it("falls back to the id when neither yields a key", () => {
@@ -48,7 +48,7 @@ describe("resolveAgentUrlKey", () => {
   it("matches normalizeAgentUrlKey for every ASCII name", () => {
     // Guards the compatibility promise: nothing about an existing agent's key
     // changes just because the column now exists.
-    for (const name of ["CEO", "Head of Paid Growth", "投手1号", "Dev One"]) {
+    for (const name of ["CEO", "Head of Paid Growth", "Pitcher 1", "Dev One"]) {
       expect(resolveAgentUrlKey({ id: ID, name })).toBe(normalizeAgentUrlKey(name) ?? ID);
     }
   });
@@ -56,7 +56,7 @@ describe("resolveAgentUrlKey", () => {
 
 describe("isValidAgentShortName", () => {
   it("accepts keys that survive normalization unchanged", () => {
-    for (const value of ["nihongo", "hai-tang", "ceo", "a", "tou-shou-1", "x9"]) {
+    for (const value of ["nihongo", "ni-hongo", "ceo", "a", "pitcher-1", "x9"]) {
       expect(isValidAgentShortName(value)).toBe(true);
     }
   });
@@ -64,7 +64,7 @@ describe("isValidAgentShortName", () => {
   it("rejects anything normalization would rewrite", () => {
     // Storing a value that differs from the key it resolves to would make the
     // stored short name and the reachable URL disagree.
-    for (const value of ["Nihongo", "ting lan", "ting_lan", "日本語", "-ting", "ting-", "ting--lan", " ting"]) {
+    for (const value of ["Nihongo", "ni hongo", "ni_hongo", "日本語", "-ni", "ni-", "ni--hongo", " ni"]) {
       expect(isValidAgentShortName(value)).toBe(false);
     }
   });
@@ -82,12 +82,12 @@ describe("isValidAgentShortName", () => {
     expect(isValidAgentShortName("a".repeat(AGENT_SHORT_NAME_MAX_LENGTH + 1))).toBe(false);
   });
 
-  it("accepts every proposed pinyin key for the Chinese-named agents", () => {
+  it("accepts the transliterated key shapes a non-Latin roster produces", () => {
+    // Keys for non-Latin names are typically transliterations: lowercase
+    // words joined by single hyphens, sometimes with a trailing index.
     const proposed = [
-      "nihongo", "hai-tang", "bai-lu", "song-xue", "shi-sui", "heng-wei", "shen-gao",
-      "yun-fan", "yuan-fan", "bei-chen", "han-jiang", "xing-cha", "shi-quan", "yan-qiu",
-      "li-feng", "qiu-shui", "mi-shu", "zhu-xi", "cang-ling", "yuan-shan", "qing-shi",
-      "qing-he", "wen-shu", "die-dai-yuan", "tou-shou-1", "tou-shou-2", "tou-shou-3",
+      "nihongo", "ni-hongo", "editor", "analyst", "researcher", "reviewer",
+      "secretary", "scheduler", "pitcher-1", "pitcher-2", "pitcher-3",
     ];
     for (const key of proposed) {
       expect(isValidAgentShortName(key), key).toBe(true);
@@ -119,7 +119,7 @@ describe("agent reference lookup via urlKey", () => {
   });
 
   it("keeps two agents distinguishable when one takes a short name", () => {
-    const a = { id: "id-a", name: "Analyst", shortName: "fen-xi-shi" };
+    const a = { id: "id-a", name: "Analyst", shortName: "an-shi" };
     const b = { id: "id-b", name: "Analyst" };
     expect(key(a)).not.toBe(key(b));
   });

@@ -10,7 +10,7 @@ const issue = (overrides: Partial<Issue> = {}): Issue => ({
 describe("Inbox automation scans", () => {
   it("collapses only explicitly labeled scans, never tasks inferred from their title or creator", () => {
     const scan = issue();
-    const manual = issue({ id: "manual", title: "扫描 Slack 新消息", labels: [], createdByUserId: "ceo" });
+    const manual = issue({ id: "manual", title: "Scan the inbox for new messages", labels: [], createdByUserId: "ceo" });
     const agent = issue({ id: "agent", labels: [], createdByAgentId: "agent" });
     expect(filterInboxAutomationScans([scan, manual, agent], { showScans: false })).toEqual([manual, agent]);
   });

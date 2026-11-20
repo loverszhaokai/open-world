@@ -72,7 +72,7 @@ describe("hasAgentShortnameCollision with explicit short names", () => {
   it("collides with another agent's explicit short name", () => {
     // The other agent answers to 'nihongo', so a new agent whose name derives
     // to the same key would make the reference ambiguous.
-    const collision = hasAgentShortnameCollision("Ting Lan", [
+    const collision = hasAgentShortnameCollision("Nihongo", [
       { id: "a1", name: "日本語", shortName: "nihongo", status: "idle" },
     ]);
     expect(collision).toBe(true);
@@ -113,7 +113,7 @@ describe("hasAgentShortNameConflict", () => {
   });
 
   it("accepts a free short name", () => {
-    const conflict = hasAgentShortNameConflict("hai-tang", [
+    const conflict = hasAgentShortNameConflict("ni-hongo", [
       { id: "a1", name: "日本語", shortName: "nihongo", status: "idle" },
       { id: "a2", name: "Analyst", status: "idle" },
     ]);
@@ -136,9 +136,9 @@ describe("hasAgentShortNameConflict", () => {
     expect(conflict).toBe(false);
   });
 
-  it("does not reserve anything for a Chinese-named agent with no short name", () => {
-    // These are the 28 agents that currently fall back to a bare UUID: they
-    // occupy no key at all, so every short name is still free.
+  it("does not reserve anything for a non-Latin-named agent with no short name", () => {
+    // Such an agent falls back to a bare UUID: it occupies no key at all,
+    // so every short name is still free.
     const conflict = hasAgentShortNameConflict("nihongo", [
       { id: "a1", name: "日本語", status: "idle" },
       { id: "a2", name: "Ελλάδα", status: "idle" },

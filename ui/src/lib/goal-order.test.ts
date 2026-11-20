@@ -23,31 +23,31 @@ function makeGoal(overrides: Partial<Goal> & { id: string; title: string }): Goa
 
 describe("parseGoalOrdinal", () => {
   it("reads a flat and a dotted ordinal off the title prefix", () => {
-    expect(parseGoalOrdinal("KR3 · 获客渠道扩展")).toEqual([3]);
+    expect(parseGoalOrdinal("KR3 · 第三项")).toEqual([3]);
     expect(parseGoalOrdinal("KR2.10 · 某子项")).toEqual([2, 10]);
   });
 
   it("returns null for titles with no leading number", () => {
-    expect(parseGoalOrdinal("风险 · 加量与降效率成本方向相反")).toBeNull();
+    expect(parseGoalOrdinal("风险 · 某项风险说明")).toBeNull();
     expect(parseGoalOrdinal("里程碑 · Q4 关键节点")).toBeNull();
-    expect(parseGoalOrdinal("O · Q4 买量增长")).toBeNull();
+    expect(parseGoalOrdinal("O · 年度目标")).toBeNull();
   });
 
   it("ignores digits that live in the descriptive tail, not the prefix", () => {
-    // "6 条" must not be read as this goal's ordinal.
+    // The "6" in the tail must not be read as this goal's ordinal.
     expect(parseGoalOrdinal("需要拍板 · 11 项未决")).toBeNull();
-    expect(parseGoalOrdinal("KR2.2 · campaign 调优：暂停最差 6 条")).toEqual([2, 2]);
+    expect(parseGoalOrdinal("KR2.2 · 某项调优：处理最差 6 条")).toEqual([2, 2]);
   });
 });
 
 describe("sortGoalSiblings", () => {
   it("orders KR1..KR5 numerically regardless of the incoming order", () => {
     const goals = [
-      makeGoal({ id: "kr1", title: "KR1 · 投放效率优化" }),
-      makeGoal({ id: "kr5", title: "KR5 · Organic 拉新" }),
-      makeGoal({ id: "kr3", title: "KR3 · 获客渠道扩展" }),
-      makeGoal({ id: "kr4", title: "KR4 · Android 预装渠道效率优化" }),
-      makeGoal({ id: "kr2", title: "KR2 · 预算调整" }),
+      makeGoal({ id: "kr1", title: "KR1 · 第一项" }),
+      makeGoal({ id: "kr5", title: "KR5 · 第五项" }),
+      makeGoal({ id: "kr3", title: "KR3 · 第三项" }),
+      makeGoal({ id: "kr4", title: "KR4 · 第四项" }),
+      makeGoal({ id: "kr2", title: "KR2 · 第二项" }),
     ];
     expect(sortGoalSiblings(goals).map((g) => g.id)).toEqual([
       "kr1",
@@ -70,10 +70,10 @@ describe("sortGoalSiblings", () => {
 
   it("puts unnumbered goals after numbered ones, keeping their relative order", () => {
     const goals = [
-      makeGoal({ id: "risk", title: "风险 · 加量与降效率成本方向相反" }),
-      makeGoal({ id: "kr2", title: "KR2 · 预算调整" }),
-      makeGoal({ id: "milestone", title: "里程碑 · Q4 关键节点" }),
-      makeGoal({ id: "kr1", title: "KR1 · 投放效率优化" }),
+      makeGoal({ id: "risk", title: "风险 · 某项风险说明" }),
+      makeGoal({ id: "kr2", title: "KR2 · 第二项" }),
+      makeGoal({ id: "milestone", title: "里程碑 · 某个节点" }),
+      makeGoal({ id: "kr1", title: "KR1 · 第一项" }),
       makeGoal({ id: "decide", title: "需要拍板 · 11 项未决" }),
     ];
     expect(sortGoalSiblings(goals).map((g) => g.id)).toEqual([
@@ -106,11 +106,11 @@ describe("sortGoalSiblings", () => {
 describe("groupGoalsByRoot", () => {
   it("splits two company-level objectives into separate blocks with their subtrees", () => {
     const goals = [
-      makeGoal({ id: "o1", title: "O · Q4 买量增长", level: "company" }),
-      makeGoal({ id: "o2", title: "O · 打造业界领先的 agent 系统", level: "company" }),
-      makeGoal({ id: "o1-kr1", title: "KR1 · 投放效率优化", parentId: "o1" }),
-      makeGoal({ id: "o2-kr1", title: "KR1 · 换壳", parentId: "o2" }),
-      makeGoal({ id: "o1-kr1-1", title: "KR1.1 · 新卖点和素材挖掘", parentId: "o1-kr1" }),
+      makeGoal({ id: "o1", title: "O · 第一个目标", level: "company" }),
+      makeGoal({ id: "o2", title: "O · 第二个目标", level: "company" }),
+      makeGoal({ id: "o1-kr1", title: "KR1 · 第一项", parentId: "o1" }),
+      makeGoal({ id: "o2-kr1", title: "KR1 · 另一项", parentId: "o2" }),
+      makeGoal({ id: "o1-kr1-1", title: "KR1.1 · 某子项", parentId: "o1-kr1" }),
     ];
     const groups = groupGoalsByRoot(goals);
     expect(groups.map((g) => g.root.id)).toEqual(["o1", "o2"]);
@@ -146,15 +146,15 @@ describe("groupGoalsByRoot", () => {
 
 describe("splitGoalTitle", () => {
   it("splits a title at its first full-width colon", () => {
-    expect(splitGoalTitle("KR6 · 规模：48 个 agent 并发")).toEqual({
+    expect(splitGoalTitle("KR6 · 规模：某项规模说明")).toEqual({
       label: "KR6 · 规模",
-      detail: "48 个 agent 并发",
+      detail: "某项规模说明",
     });
   });
 
   it("leaves a title without a colon untouched", () => {
-    expect(splitGoalTitle("KR1.4 · 加量闸门")).toEqual({
-      label: "KR1.4 · 加量闸门",
+    expect(splitGoalTitle("KR1.4 · 第四子项")).toEqual({
+      label: "KR1.4 · 第四子项",
       detail: null,
     });
   });
