@@ -7,7 +7,7 @@ import { createApiProxy } from "./src/lib/vite-api-proxy";
 import { serviceWorkerBuildIdPlugin } from "./src/lib/vite-sw-build-id";
 import { readBrowserBuildCommit } from "./src/lib/vite-build-commit";
 
-const apiProxy = createApiProxy(process.env.VITE_API_TARGET || "http://localhost:3100");
+const apiProxy = createApiProxy();
 
 function preloadIssueDetail(): Plugin {
   return {

@@ -1,17 +1,15 @@
 /**
  * crypto.randomUUID polyfill for non-secure contexts.
  *
- * Browsers only expose crypto.randomUUID() in a "secure context" (HTTPS, or
- * localhost). This dev instance is served over plain HTTP on a LAN IP
- * (http://172.31.26.17:3201), so the API is absent and ~17 call sites across
- * the UI throw "crypto.randomUUID is not a function" — notably
- * OnboardingWizard, which breaks first-run setup entirely.
+ * Browsers expose crypto.randomUUID() only in a secure context (HTTPS, or
+ * localhost). A self-hosted instance is commonly served over plain HTTP on a
+ * LAN address, where the API is absent and every call site throws — including
+ * the onboarding wizard, which leaves first-run setup unusable.
  *
- * crypto.getRandomValues() IS available in non-secure contexts, so we build a
- * spec-compliant RFC 4122 v4 UUID from it. Falls back to Math.random() only if
- * getRandomValues is somehow missing too.
- *
- * Local dev shim — not for production over HTTPS, where the native one is used.
+ * crypto.getRandomValues() IS available in non-secure contexts, so this builds
+ * a spec-compliant RFC 4122 v4 UUID from it, falling back to Math.random()
+ * only if getRandomValues is missing as well. Where the native implementation
+ * exists it is left untouched.
  */
 function randomBytes16(): Uint8Array {
   const bytes = new Uint8Array(16);

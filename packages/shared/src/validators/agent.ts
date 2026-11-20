@@ -97,7 +97,7 @@ export const createAgentSchema = z.object({
     .transform((value) => (value.length === 0 ? null : value))
     .refine((value) => value === null || isValidAgentShortName(value), {
       message:
-        "shortName must be lowercase letters, digits and single hyphens (for example 'ting-lan'), and cannot be a UUID",
+        "shortName must be lowercase letters, digits and single hyphens (for example 'research-team'), and cannot be a UUID",
     })
     .nullable()
     .optional(),

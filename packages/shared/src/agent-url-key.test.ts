@@ -16,14 +16,14 @@ describe("resolveAgentUrlKey", () => {
   it("gives a Chinese-named agent a usable key instead of a bare UUID", () => {
     // The 28 agents this feature exists for: the name normalizes to nothing,
     // so before `shortName` they were addressable only by UUID.
-    expect(resolveAgentUrlKey({ id: ID, name: "听澜" })).toBe(ID);
-    expect(resolveAgentUrlKey({ id: ID, name: "听澜", shortName: "ting-lan" })).toBe("ting-lan");
+    expect(resolveAgentUrlKey({ id: ID, name: "日本語" })).toBe(ID);
+    expect(resolveAgentUrlKey({ id: ID, name: "日本語", shortName: "nihongo" })).toBe("nihongo");
   });
 
   it("keeps the key stable across a rename", () => {
     // The whole point of storing it: saved links and scripts keep working.
-    const before = resolveAgentUrlKey({ id: ID, name: "听澜", shortName: "ting-lan" });
-    const after = resolveAgentUrlKey({ id: ID, name: "Listening Wave", shortName: "ting-lan" });
+    const before = resolveAgentUrlKey({ id: ID, name: "日本語", shortName: "nihongo" });
+    const after = resolveAgentUrlKey({ id: ID, name: "Listening Wave", shortName: "nihongo" });
     expect(after).toBe(before);
   });
 
@@ -37,7 +37,7 @@ describe("resolveAgentUrlKey", () => {
   });
 
   it("normalizes a short name that was stored unnormalized", () => {
-    expect(resolveAgentUrlKey({ id: ID, name: "x", shortName: "  Ting Lan  " })).toBe("ting-lan");
+    expect(resolveAgentUrlKey({ id: ID, name: "x", shortName: "  Ting Lan  " })).toBe("nihongo");
   });
 
   it("falls back to the id when neither yields a key", () => {
@@ -56,7 +56,7 @@ describe("resolveAgentUrlKey", () => {
 
 describe("isValidAgentShortName", () => {
   it("accepts keys that survive normalization unchanged", () => {
-    for (const value of ["ting-lan", "hai-tang", "ceo", "a", "tou-shou-1", "x9"]) {
+    for (const value of ["nihongo", "hai-tang", "ceo", "a", "tou-shou-1", "x9"]) {
       expect(isValidAgentShortName(value)).toBe(true);
     }
   });
@@ -64,7 +64,7 @@ describe("isValidAgentShortName", () => {
   it("rejects anything normalization would rewrite", () => {
     // Storing a value that differs from the key it resolves to would make the
     // stored short name and the reachable URL disagree.
-    for (const value of ["Ting-Lan", "ting lan", "ting_lan", "听澜", "-ting", "ting-", "ting--lan", " ting"]) {
+    for (const value of ["Nihongo", "ting lan", "ting_lan", "日本語", "-ting", "ting-", "ting--lan", " ting"]) {
       expect(isValidAgentShortName(value)).toBe(false);
     }
   });
@@ -84,7 +84,7 @@ describe("isValidAgentShortName", () => {
 
   it("accepts every proposed pinyin key for the Chinese-named agents", () => {
     const proposed = [
-      "ting-lan", "hai-tang", "bai-lu", "song-xue", "shi-sui", "heng-wei", "shen-gao",
+      "nihongo", "hai-tang", "bai-lu", "song-xue", "shi-sui", "heng-wei", "shen-gao",
       "yun-fan", "yuan-fan", "bei-chen", "han-jiang", "xing-cha", "shi-quan", "yan-qiu",
       "li-feng", "qiu-shui", "mi-shu", "zhu-xi", "cang-ling", "yuan-shan", "qing-shi",
       "qing-he", "wen-shu", "die-dai-yuan", "tou-shou-1", "tou-shou-2", "tou-shou-3",
@@ -105,10 +105,10 @@ describe("agent reference lookup via urlKey", () => {
     resolveAgentUrlKey(agent);
 
   it("makes a Chinese-named agent reachable by its short name", () => {
-    const agent = { id: ID, name: "听澜", shortName: "ting-lan" };
-    expect(key(agent)).toBe(normalizeAgentUrlKey("ting-lan"));
+    const agent = { id: ID, name: "日本語", shortName: "nihongo" };
+    expect(key(agent)).toBe(normalizeAgentUrlKey("nihongo"));
     // And the reference the user types normalizes to the same thing.
-    expect(normalizeAgentUrlKey("Ting-Lan")).toBe(key(agent));
+    expect(normalizeAgentUrlKey("Nihongo")).toBe(key(agent));
   });
 
   it("stops the old derived key resolving once a short name is set", () => {
@@ -126,7 +126,7 @@ describe("agent reference lookup via urlKey", () => {
 
   it("would make two agents ambiguous if a short name duplicated a derived key", () => {
     // The uniqueness guard on the server exists precisely to prevent this.
-    const a = { id: "id-a", name: "听澜", shortName: "analyst" };
+    const a = { id: "id-a", name: "日本語", shortName: "analyst" };
     const b = { id: "id-b", name: "Analyst" };
     expect(key(a)).toBe(key(b));
   });

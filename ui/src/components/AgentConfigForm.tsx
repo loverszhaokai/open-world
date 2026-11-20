@@ -1590,7 +1590,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 onCommit={(v) => mark("identity", "shortName", v.trim() || null)}
                 immediate
                 className={inputClass}
-                placeholder={normalizeAgentUrlKey(eff("identity", "name", props.agent.name)) ?? "e.g. ting-lan"}
+                placeholder={normalizeAgentUrlKey(eff("identity", "name", props.agent.name)) ?? "e.g. research-team"}
               />
             </Field>
             <Field label="Title" hint={help.title}>

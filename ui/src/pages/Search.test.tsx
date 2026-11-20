@@ -10,7 +10,7 @@ import { Search, buildSearchUrl } from "./Search";
 
 const companyState = vi.hoisted(() => ({
   selectedCompanyId: "company-1",
-  selectedCompany: { issuePrefix: "PEN" },
+  selectedCompany: { issuePrefix: "ACME" },
 }));
 
 const breadcrumbState = vi.hoisted(() => ({
@@ -186,7 +186,7 @@ describe("Search page", () => {
   it("uses the current company prefix in identifier examples", async () => {
     const { root } = renderSearch("/search", container);
     await flush();
-    expect(container.textContent).toContain("PEN-123");
+    expect(container.textContent).toContain("ACME-123");
     expect(container.textContent).not.toContain("PAP-123");
     flushSync(() => root.unmount());
   });

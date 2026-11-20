@@ -70,10 +70,10 @@ describe("deduplicateAgentName", () => {
 
 describe("hasAgentShortnameCollision with explicit short names", () => {
   it("collides with another agent's explicit short name", () => {
-    // The other agent answers to 'ting-lan', so a new agent whose name derives
+    // The other agent answers to 'nihongo', so a new agent whose name derives
     // to the same key would make the reference ambiguous.
     const collision = hasAgentShortnameCollision("Ting Lan", [
-      { id: "a1", name: "听澜", shortName: "ting-lan", status: "idle" },
+      { id: "a1", name: "日本語", shortName: "nihongo", status: "idle" },
     ]);
     expect(collision).toBe(true);
   });
@@ -97,8 +97,8 @@ describe("hasAgentShortnameCollision with explicit short names", () => {
 
 describe("hasAgentShortNameConflict", () => {
   it("rejects a short name another agent already uses", () => {
-    const conflict = hasAgentShortNameConflict("ting-lan", [
-      { id: "a1", name: "听澜", shortName: "ting-lan", status: "idle" },
+    const conflict = hasAgentShortNameConflict("nihongo", [
+      { id: "a1", name: "日本語", shortName: "nihongo", status: "idle" },
     ]);
     expect(conflict).toBe(true);
   });
@@ -114,7 +114,7 @@ describe("hasAgentShortNameConflict", () => {
 
   it("accepts a free short name", () => {
     const conflict = hasAgentShortNameConflict("hai-tang", [
-      { id: "a1", name: "听澜", shortName: "ting-lan", status: "idle" },
+      { id: "a1", name: "日本語", shortName: "nihongo", status: "idle" },
       { id: "a2", name: "Analyst", status: "idle" },
     ]);
     expect(conflict).toBe(false);
@@ -122,16 +122,16 @@ describe("hasAgentShortNameConflict", () => {
 
   it("lets an agent keep its own short name", () => {
     const conflict = hasAgentShortNameConflict(
-      "ting-lan",
-      [{ id: "a1", name: "听澜", shortName: "ting-lan", status: "idle" }],
+      "nihongo",
+      [{ id: "a1", name: "日本語", shortName: "nihongo", status: "idle" }],
       { excludeAgentId: "a1" },
     );
     expect(conflict).toBe(false);
   });
 
   it("ignores terminated agents", () => {
-    const conflict = hasAgentShortNameConflict("ting-lan", [
-      { id: "a1", name: "听澜", shortName: "ting-lan", status: "terminated" },
+    const conflict = hasAgentShortNameConflict("nihongo", [
+      { id: "a1", name: "日本語", shortName: "nihongo", status: "terminated" },
     ]);
     expect(conflict).toBe(false);
   });
@@ -139,9 +139,9 @@ describe("hasAgentShortNameConflict", () => {
   it("does not reserve anything for a Chinese-named agent with no short name", () => {
     // These are the 28 agents that currently fall back to a bare UUID: they
     // occupy no key at all, so every short name is still free.
-    const conflict = hasAgentShortNameConflict("ting-lan", [
-      { id: "a1", name: "听澜", status: "idle" },
-      { id: "a2", name: "海棠", status: "idle" },
+    const conflict = hasAgentShortNameConflict("nihongo", [
+      { id: "a1", name: "日本語", status: "idle" },
+      { id: "a2", name: "Ελλάδα", status: "idle" },
     ]);
     expect(conflict).toBe(false);
   });
