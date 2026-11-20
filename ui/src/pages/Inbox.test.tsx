@@ -473,6 +473,32 @@ describe("Inbox toolbar", () => {
     act(() => root.unmount());
   });
 
+  it("collapses labeled scans and restores them with the persisted scan toggle", async () => {
+    routerMock.location.pathname = "/inbox/recent";
+    const scan = createIssue({
+      id: "scan-row", identifier: "PAP-1905", title: "Routine scan fixture", priority: "medium", status: "todo",
+      labels: [{ id: "scan-label", companyId: "company-1", name: "automation:scan", color: "var(--muted)", createdAt: new Date(), updatedAt: new Date() }],
+    });
+    const decision = createIssue({ id: "decision-row", title: "Please review the proposal" });
+    apiMocks.issuesList.mockResolvedValue([scan, decision]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } } });
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(<QueryClientProvider client={client}><Inbox /></QueryClientProvider>));
+      await vi.waitFor(() => expect(container.textContent).toContain(decision.title));
+      expect(container.textContent).not.toContain(scan.title);
+      const toggle = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Show scan tasks");
+      expect(toggle).toBeDefined();
+      await act(async () => toggle!.click());
+      await vi.waitFor(() => expect(container.textContent).toContain(scan.title));
+      const stored = localStorage.getItem(taskCollectionPreferencesStorageKey({ companyId: "company-1", collectionKey: "inbox" }));
+      expect(stored).toContain('"showAutomationScans":true');
+    } finally {
+      act(() => root.unmount());
+      client.clear();
+    }
+  });
+
   it("does not render external-object summaries in inbox rows", async () => {
     routerMock.location.pathname = "/inbox/mine";
     const issue = createIssue({ title: "Inbox row without external object column" });

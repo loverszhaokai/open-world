@@ -1,0 +1,18 @@
+--- a/wake.py
++++ b/wake.py
+@@ -16,6 +16,7 @@
+ import subprocess
+ import sys
+ import time
++from slack_scan_source import ensure_scan_label
+ 
+ HOME = "/data/zhaokai/opt/slack-watch"
+ CANDIDATES_PATH = os.path.join(HOME, "candidates.json")
+@@ -213,6 +214,7 @@
+         "status": "todo",                       # 坑 1：不写会落 backlog
+         "assigneeAgentId": SECRETARY_AGENT_ID,  # 坑 2：必须设这个才会派活
+         "priority": "medium",
++        "labelIds": [ensure_scan_label(curl, BASE, COMPANY_ID)],
+     }, ensure_ascii=False)
+     out = curl([
+         "-X", "POST",

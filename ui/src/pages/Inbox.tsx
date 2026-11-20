@@ -1,3 +1,4 @@
+import { filterInboxAutomationScans } from "../lib/inbox-automation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -196,10 +197,12 @@ const INBOX_HOT_PATH_STALE_MS = 30_000;
 const INBOX_COLLECTION_KEY = "inbox";
 
 type StreamlinedInboxViewState = InboxFilterPreferences & {
+  showAutomationScans: boolean;
   showDateGroupSeparators: boolean;
 };
 
 const DEFAULT_INBOX_FILTER_PREFERENCES: StreamlinedInboxViewState = {
+  showAutomationScans: false,
   allCategoryFilter: "everything",
   allApprovalFilter: "all",
   issueFilters: { ...defaultIssueFilterState },
@@ -230,6 +233,7 @@ function normalizeInboxCollectionViewState(value: unknown): StreamlinedInboxView
       workspaces: [],
     },
     showDateGroupSeparators: candidate.showDateGroupSeparators !== false,
+    showAutomationScans: candidate.showAutomationScans === true,
   };
 }
 
@@ -866,7 +870,7 @@ function StreamlinedInbox({
   const { dismissed: dismissedAlerts, dismiss: dismissAlert } = useDismissedInboxAlerts();
   const { dismissedAtByKey, dismiss: dismissInboxItem } = useInboxDismissals(selectedCompanyId);
   const { readItems, markRead: markItemRead, markUnread: markItemUnread } = useReadInboxItems();
-  const { allCategoryFilter, allApprovalFilter, issueFilters } = filterPreferences;
+  const { allCategoryFilter, allApprovalFilter, issueFilters, showAutomationScans } = filterPreferences;
 
   const pathSegment = location.pathname.split("/").pop() ?? "mine";
   const pathTab: InboxTab =
@@ -1169,12 +1173,18 @@ function StreamlinedInbox({
     externalObjectSummariesReady: externalObjectSummariesReady && !externalObjectSummariesLoading,
   }), [externalObjectSummariesLoading, externalObjectSummariesReady, externalObjectSummaryByIssueId]);
   const visibleMineIssues = useMemo(
-    () => applyIssueFilters(mineIssues, issueFilters, currentUserId, false, liveIssueIds, issueFilterContext),
-    [mineIssues, issueFilters, currentUserId, liveIssueIds, issueFilterContext],
+    () => filterInboxAutomationScans(
+      applyIssueFilters(mineIssues, issueFilters, currentUserId, false, liveIssueIds, issueFilterContext),
+      { showScans: showAutomationScans, currentUserId, searching: Boolean(normalizedSearchQuery) },
+    ),
+    [mineIssues, issueFilters, currentUserId, liveIssueIds, issueFilterContext, showAutomationScans, normalizedSearchQuery],
   );
   const visibleTouchedIssues = useMemo(
-    () => applyIssueFilters(touchedIssues, issueFilters, currentUserId, false, liveIssueIds, issueFilterContext),
-    [touchedIssues, issueFilters, currentUserId, liveIssueIds, issueFilterContext],
+    () => filterInboxAutomationScans(
+      applyIssueFilters(touchedIssues, issueFilters, currentUserId, false, liveIssueIds, issueFilterContext),
+      { showScans: showAutomationScans, currentUserId, searching: Boolean(normalizedSearchQuery) },
+    ),
+    [touchedIssues, issueFilters, currentUserId, liveIssueIds, issueFilterContext, showAutomationScans, normalizedSearchQuery],
   );
   const unreadTouchedIssues = useMemo(
     () => visibleTouchedIssues.filter((issue) => issue.isUnreadForMe),
@@ -2603,6 +2613,18 @@ function StreamlinedInbox({
             </>
           ) : showGeneralIssueToolbarControls ? (
             <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-pressed={showAutomationScans}
+                onClick={() => updateFilterPreferences((previous) => ({
+                  ...previous, showAutomationScans: !previous.showAutomationScans,
+                }))}
+                title="Routine scan tasks stay collapsed unless they need your attention. Search includes them."
+              >
+                {showAutomationScans ? "Hide scan tasks" : "Show scan tasks"}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
