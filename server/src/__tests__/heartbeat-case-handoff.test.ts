@@ -65,6 +65,46 @@ describe("durable case handoff queue admission", () => {
     expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, f.wakeupRequestId))).toHaveLength(1);
     expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.companyId), eq(heartbeatRuns.wakeupRequestId, f.wakeupRequestId)))).toHaveLength(1);
   });
+  it("replaces an unstarted same-agent queued lock with the exact pending handoff receipt", async () => {
+    const f = await fixture(), staleRunId = randomUUID(), staleWakeId = randomUUID();
+    await db.insert(agentWakeupRequests).values({ id: staleWakeId, companyId: f.companyId,
+      agentId: f.agentId, source: "assignment", status: "queued", payload: { issueId: f.issueId } });
+    await db.insert(heartbeatRuns).values({ id: staleRunId, companyId: f.companyId, agentId: f.agentId,
+      status: "queued", wakeupRequestId: staleWakeId, contextSnapshot: { issueId: f.issueId }, responsibleUserId: f.userId });
+    await db.update(issues).set({ executionRunId: staleRunId, executionLockedAt: new Date() }).where(eq(issues.id, f.issueId));
+    await db.update(caseHandoffs).set({ fromAgentId: f.agentId }).where(eq(caseHandoffs.id, f.handoffId));
+    await caseHandoffDeliveryService(db, { heartbeat: heartbeatService(db), now: () => new Date(Date.now() + 60_000) }).sweepPending();
+    const [handoff] = await db.select().from(caseHandoffs).where(eq(caseHandoffs.id, f.handoffId));
+    expect(handoff?.state, handoff?.lastError ?? undefined).toBe("delivered");
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, staleRunId)))[0])
+      .toMatchObject({ status: "cancelled", startedAt: null, errorCode: "case_handoff_superseded" });
+    expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, staleWakeId)))[0]?.status).toBe("cancelled");
+    const [receipt] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, f.wakeupRequestId));
+    expect(receipt).toMatchObject({ status: "queued" });
+    // Admission is lazy-locking: the replacement takes the issue lock only
+    // when it starts, after the deliberately occupied agent slot is released.
+    expect((await db.select().from(issues).where(eq(issues.id, f.issueId)))[0]?.executionRunId).toBeNull();
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, receipt.runId!)))[0])
+      .toMatchObject({ status: "queued", wakeupRequestId: f.wakeupRequestId, startedAt: null });
+    expect(await heartbeatService(db).wakeup(f.agentId, f.options)).toMatchObject({ id: receipt.runId });
+  });
+  it.each([
+    { status: "running", startedAt: new Date() },
+    { status: "queued", startedAt: new Date() },
+    { status: "queued", runtimeModeResolvedAt: new Date() },
+    { status: "queued", processPid: 12345 },
+    { status: "queued", runnerInstanceId: randomUUID() },
+  ])("keeps a same-agent execution lock with ownership evidence: %j", async evidence => {
+    const f = await fixture(), staleRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: staleRunId, companyId: f.companyId, agentId: f.agentId,
+      contextSnapshot: { issueId: f.issueId }, responsibleUserId: f.userId, ...evidence });
+    await db.update(issues).set({ executionRunId: staleRunId }).where(eq(issues.id, f.issueId));
+    await db.update(caseHandoffs).set({ fromAgentId: f.agentId }).where(eq(caseHandoffs.id, f.handoffId));
+    expect(await heartbeatService(db).wakeup(f.agentId, f.options)).toBeNull();
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, staleRunId)))[0]).toMatchObject(evidence);
+    expect((await db.select().from(issues).where(eq(issues.id, f.issueId)))[0]?.executionRunId).toBe(staleRunId);
+    expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, f.wakeupRequestId))).toHaveLength(0);
+  });
   it("does not spend the durable receipt on a paused recipient and retries the same identity", async () => {
     const f = await fixture();
     await db.update(agents).set({ status: "paused" }).where(eq(agents.id, f.agentId));

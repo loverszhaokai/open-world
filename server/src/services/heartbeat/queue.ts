@@ -3505,6 +3505,45 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
             activeExecutionRun = null;
           }
 
+          // The exact handoff owns admission, including same-agent phase changes.
+          // An older generic queue entry cannot pass the pending-handoff claim
+          // fence, so leaving its issue lock in place would deadlock delivery.
+          // Retire only an unclaimed legacy entry with no runtime selection or
+          // execution evidence. Pin those conditions in the UPDATE as well: a
+          // concurrent claim must win safely and keep delivery deferred.
+          if (caseRequest && activeExecutionRun &&
+              activeExecutionRun.companyId === issue.companyId &&
+              activeExecutionRun.agentId === agentId &&
+              activeExecutionRun.wakeupRequestId !== caseRequest.wakeupRequestId &&
+              !activeRunExecutions.has(activeExecutionRun.id) &&
+              !adapterExecutionControls.has(activeExecutionRun.id) &&
+              !(await hasPendingRunCleanup(tx as unknown as Db, issue.companyId, activeExecutionRun.id))) {
+            const now = new Date();
+            const [cancelled] = await tx.update(heartbeatRuns).set({
+              status: "cancelled", finishedAt: now, updatedAt: now,
+              error: "Unstarted queue entry superseded by the current case handoff",
+              errorCode: "case_handoff_superseded",
+              resultJson: { executionRecovery: { kind: "bootstrap", providerWorkStarted: false } },
+            }).where(and(
+              eq(heartbeatRuns.id, activeExecutionRun.id), eq(heartbeatRuns.companyId, issue.companyId),
+              eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.status, "queued"),
+              eq(heartbeatRuns.runtimeMode, "legacy"), isNull(heartbeatRuns.startedAt),
+              isNull(heartbeatRuns.runtimeModeResolvedAt), isNull(heartbeatRuns.controllerBootId),
+              isNull(heartbeatRuns.processPid), isNull(heartbeatRuns.processGroupId),
+              isNull(heartbeatRuns.processStartedAt), isNull(heartbeatRuns.executionStage),
+              isNull(heartbeatRuns.runnerInstanceId), isNull(heartbeatRuns.nativeSessionId),
+              isNull(heartbeatRuns.externalRunId), isNull(heartbeatRuns.resultJson),
+            )).returning();
+            if (cancelled) {
+              cancelledRunsToEmit.push(cancelled);
+              if (cancelled.wakeupRequestId) await tx.update(agentWakeupRequests).set({
+                status: "cancelled", finishedAt: now, error: cancelled.error, updatedAt: now,
+              }).where(and(eq(agentWakeupRequests.id, cancelled.wakeupRequestId),
+                eq(agentWakeupRequests.companyId, issue.companyId), eq(agentWakeupRequests.agentId, agentId)));
+              activeExecutionRun = null;
+            }
+          }
+
           // A queued/scheduled run holding the lock for an agent that is
           // no longer the issue's assignee is stale by design — the issue
           // has been re-routed (e.g. blocked → in_review with a different
