@@ -269,7 +269,30 @@ export function projectRoutes(db: Db) {
     return false;
   }
 
-  async function filterProjectsForActor<T extends { id: string; companyId: string }>(req: Request, rows: T[]) {
+  async function redactProjectParents<T extends { companyId: string; parentProjectId?: string | null }>(req: Request, rows: T[]): Promise<T[]> {
+    const parents = new Map<string, string>();
+    for (const row of rows) if (row.parentProjectId) parents.set(row.parentProjectId, row.companyId);
+    const visible = new Set<string>();
+    await Promise.all([...parents].map(async ([projectId, companyId]) => {
+      const decision = await access.decide({ actor: req.actor, action: "project:read",
+        resource: { type: "project", companyId, projectId } });
+      if (decision.allowed) visible.add(projectId);
+    }));
+    return rows.map(row => row.parentProjectId && !visible.has(row.parentProjectId)
+      ? { ...row, parentProjectId: null } : row);
+  }
+
+  async function assertParentProjectReadable(req: Request, res: Response, companyId: string, parentProjectId?: string | null) {
+    if (!parentProjectId) return true;
+    const parent = await svc.getById(parentProjectId);
+    if (!parent || parent.companyId !== companyId) {
+      res.status(404).json({ error: "Project not found" });
+      return false;
+    }
+    return assertProjectReadAllowed(req, res, parent);
+  }
+
+  async function filterProjectsForActor<T extends { id: string; companyId: string; parentProjectId?: string | null }>(req: Request, rows: T[]) {
     const decisions = await Promise.all(rows.map((project) =>
       access.decide({
         actor: req.actor,
@@ -277,7 +300,7 @@ export function projectRoutes(db: Db) {
         resource: { type: "project", companyId: project.companyId, projectId: project.id },
       })
     ));
-    return rows.filter((_, index) => decisions[index]?.allowed);
+    return redactProjectParents(req, rows.filter((_, index) => decisions[index]?.allowed));
   }
 
   router.param("id", async (req, _res, next, rawId) => {
@@ -310,7 +333,7 @@ export function projectRoutes(db: Db) {
       action: "project.repositories_updated", entityType: "project", entityId: project.id,
       details: { repositoryIds: repositories.map((repo) => repo.id) },
     });
-    res.json(updated);
+    res.json(updated ? (await redactProjectParents(req, [updated]))[0] : null);
   });
 
   router.get("/companies/:companyId/projects", async (req, res) => {
@@ -346,7 +369,7 @@ export function projectRoutes(db: Db) {
     const project = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
     if (!project) return;
     if (!(await assertProjectReadAllowed(req, res, project))) return;
-    res.json(project);
+    res.json((await redactProjectParents(req, [project]))[0]);
   });
 
   router.get("/projects/:id/external-object-summary", async (req, res) => {
@@ -367,6 +390,7 @@ export function projectRoutes(db: Db) {
     };
 
     const { workspace, repositoryIds, repositoryUrls, idempotencyKey, ...projectData } = req.body as CreateProjectPayload & { idempotencyKey?: string; repositoryUrls?: string[] };
+    if (!(await assertParentProjectReadable(req, res, companyId, projectData.parentProjectId))) return;
     projectData.privacyOwnerUserId = req.actor.type === "board" ? req.actor.userId ?? null : req.actor.type === "agent" ? req.actor.onBehalfOfUserId ?? null : null;
     const runContext = req.actor.type === "agent" && req.actor.source === "agent_jwt" && req.actor.runId
       ? await projectToolContext(db, req.actor, true) : null;
@@ -468,12 +492,12 @@ export function projectRoutes(db: Db) {
     });
     if (result.publication) publishActivity(result.publication);
     if (result.project.env) await secretsSvc.syncEnvBindingsForTarget?.(companyId, { targetType: "project", targetId: result.project.id }, result.project.env);
-    if (result.duplicate) { res.status(200).json(result.project); return; }
+    if (result.duplicate) { res.status(200).json((await redactProjectParents(req, [result.project]))[0]); return; }
     const telemetryClient = getTelemetryClient();
     if (telemetryClient) {
       trackProjectCreated(telemetryClient);
     }
-    res.status(result.duplicate ? 200 : 201).json(result.project);
+    res.status(result.duplicate ? 200 : 201).json((await redactProjectParents(req, [result.project]))[0]);
   });
 
   router.patch("/projects/:id", validate(updateProjectSchema), async (req, res) => {
@@ -482,6 +506,7 @@ export function projectRoutes(db: Db) {
     if (!existing) return;
     if (!(await assertProjectReadAllowed(req, res, existing))) return;
     const body = { ...req.body };
+    if (!(await assertParentProjectReadable(req, res, existing.companyId, body.parentProjectId))) return;
     if (body.visibility !== undefined) {
       if (!(await assertCanManageProjectPrivacy(req, res, existing))) return;
     }
@@ -534,7 +559,7 @@ export function projectRoutes(db: Db) {
       },
     });
 
-    res.json(project);
+    res.json((await redactProjectParents(req, [project]))[0]);
   });
 
   router.get("/projects/:id/access-members", async (req, res) => {
@@ -1052,7 +1077,7 @@ export function projectRoutes(db: Db) {
       entityId: project.id,
     });
 
-    res.json(project);
+    res.json((await redactProjectParents(req, [project]))[0]);
   });
 
   return router;

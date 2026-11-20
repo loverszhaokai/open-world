@@ -113,6 +113,8 @@ export interface ProjectWorkspaceProviderConfiguration {
 export interface Project {
   id: string;
   companyId: string;
+  /** Navigation only; permissions, goals and budgets remain independent. */
+  parentProjectId?: string | null;
   urlKey: string;
   /** @deprecated Use goalIds / goals instead */
   goalId: string | null;
