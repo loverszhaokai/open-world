@@ -184,68 +184,68 @@ export function Projects() {
                           })}>
                           {collapsed.has(project.id) && !query.trim() ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
                         </button> : <span className="w-8 shrink-0" />}
-                      <EntityRow
-                        leading={<ProjectTile color={project.color ?? null} icon={project.icon ?? null} size="sm" />}
-                        title={project.name}
-                        titleAccessory={depth === 0 && projectAncestorPath(project, projectsById)
-                          ? <span className="truncate text-xs text-muted-foreground">in {projectAncestorPath(project, projectsById)}</span> : undefined}
-                        subtitle={project.description ? <MarkdownSummary>{project.description}</MarkdownSummary> : undefined}
-                        reserveSubtitleSpace
-                        to={projectUrl(project)}
-                        className={`group min-w-0 flex-1 ${state === "left" ? "text-foreground/55" : ""}`}
-                        trailing={
-                          <div className="flex items-center gap-3">
-                            {project.visibility === "private" ? <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Private project" /> : null}
-                            <span
-                              className="hidden text-xs text-muted-foreground tabular-nums sm:inline"
-                              title={`${formatNumber(project.taskCount ?? 0)} task${(project.taskCount ?? 0) === 1 ? "" : "s"}`}
-                            >
-                              {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? "" : "s"}
+                      <div className="min-w-0 flex-1 sm:flex sm:items-center">
+                        <EntityRow
+                          leading={<ProjectTile color={project.color ?? null} icon={project.icon ?? null} size="sm" />}
+                          title={project.name}
+                          titleAccessory={depth === 0 && projectAncestorPath(project, projectsById)
+                            ? <span className="truncate text-xs text-muted-foreground">in {projectAncestorPath(project, projectsById)}</span> : undefined}
+                          subtitle={project.description ? <MarkdownSummary>{project.description}</MarkdownSummary> : undefined}
+                          reserveSubtitleSpace
+                          to={projectUrl(project)}
+                          className={`group min-w-0 flex-1 border-b-0 ${state === "left" ? "text-foreground/55" : ""}`}
+                        />
+                        <div className="flex flex-wrap items-center gap-3 px-4 pb-2 sm:shrink-0 sm:pb-0">
+                          {project.visibility === "private" ? <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Private project" /> : null}
+                          <span
+                            className="hidden text-xs text-muted-foreground tabular-nums sm:inline"
+                            title={`${formatNumber(project.taskCount ?? 0)} task${(project.taskCount ?? 0) === 1 ? "" : "s"}`}
+                          >
+                            {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? "" : "s"}
+                          </span>
+                          {project.budget && (
+                            <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
+                              {formatProjectBudget(project.budget)}
                             </span>
-                            {project.budget && (
-                              <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
-                                {formatProjectBudget(project.budget)}
-                              </span>
-                            )}
-                            {project.targetDate && (
-                              <span className="hidden text-xs text-muted-foreground md:inline">
-                                {formatDate(project.targetDate)}
-                              </span>
-                            )}
-                            <StatusBadge status={project.status} />
-                            <MembershipAction
-                              state={state}
-                              pending={joinLeavePending}
-                              pendingState={joinLeavePending ? membershipMutation.variables?.state : null}
-                              resourceName={project.name}
-                              onJoin={() => membershipMutation.mutate({
-                                resourceType: "project",
-                                resourceId: project.id,
-                                resourceName: project.name,
-                                state: "joined",
-                              })}
-                              onLeave={() => membershipMutation.mutate({
-                                resourceType: "project",
-                                resourceId: project.id,
-                                resourceName: project.name,
-                                state: "left",
-                              })}
-                            />
-                            <StarToggle
-                              size="row"
-                              starred={starred}
-                              pending={starPending}
-                              resourceName={project.name}
-                              onToggle={(next) => membershipMutation.mutate({
-                                resourceType: "project",
-                                resourceId: project.id,
-                                resourceName: project.name,
-                                starred: next,
-                              })}
-                            />
-                          </div>
-                        }
-                      />
+                          )}
+                          {project.targetDate && (
+                            <span className="hidden text-xs text-muted-foreground md:inline">
+                              {formatDate(project.targetDate)}
+                            </span>
+                          )}
+                          <StatusBadge status={project.status} />
+                          <MembershipAction
+                            state={state}
+                            pending={joinLeavePending}
+                            pendingState={joinLeavePending ? membershipMutation.variables?.state : null}
+                            resourceName={project.name}
+                            onJoin={() => membershipMutation.mutate({
+                              resourceType: "project",
+                              resourceId: project.id,
+                              resourceName: project.name,
+                              state: "joined",
+                            })}
+                            onLeave={() => membershipMutation.mutate({
+                              resourceType: "project",
+                              resourceId: project.id,
+                              resourceName: project.name,
+                              state: "left",
+                            })}
+                          />
+                          <StarToggle
+                            size="row"
+                            starred={starred}
+                            pending={starPending}
+                            resourceName={project.name}
+                            onToggle={(next) => membershipMutation.mutate({
+                              resourceType: "project",
+                              resourceId: project.id,
+                              resourceName: project.name,
+                              starred: next,
+                            })}
+                          />
+                        </div>
+                      </div>
                       </div>
                     );
                   })}
