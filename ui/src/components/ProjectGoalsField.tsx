@@ -1,27 +1,13 @@
 import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Goal, Project } from "@paperclipai/shared";
+import type { Project } from "@paperclipai/shared";
 import { goalsApi } from "@/api/goals";
 import { queryKeys } from "@/lib/queryKeys";
-import { sortGoalSiblings } from "@/lib/goal-order";
+import { goalPath, sortGoalSiblings } from "@/lib/goal-order";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 type GoalProject = Pick<Project, "companyId" | "goalId" | "goalIds" | "goals">;
-
-// Show the ancestor path so identically named KRs remain distinguishable.
-// A malformed cycle must not hang the configuration page.
-function goalPath(goal: Goal, byId: Map<string, Goal>): string {
-  const titles = [goal.title];
-  const seen = new Set([goal.id]);
-  let parent = goal.parentId ? byId.get(goal.parentId) : undefined;
-  while (parent && !seen.has(parent.id)) {
-    seen.add(parent.id);
-    titles.unshift(parent.title);
-    parent = parent.parentId ? byId.get(parent.parentId) : undefined;
-  }
-  return titles.join(" / ");
-}
 
 export function ProjectGoalsField({ project, onSave }: {
   project: GoalProject;

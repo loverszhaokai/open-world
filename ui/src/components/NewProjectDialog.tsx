@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { ProjectRepositoryInput, repositoryOptionsKey } from "./ProjectRepositoryInput";
 import { ConnectionSetupFlow } from "@/features/connections/ConnectionSetupFlow";
+import { NewProjectGoals } from "./NewProjectGoals";
 
 export function NewProjectDialog() {
   const { newProjectOpen, closeNewProject } = useDialog();
@@ -25,10 +26,12 @@ export function NewProjectForm({ companyId, onClose }: { companyId: string; onCl
   const [name, setName] = useState("");
   const [color] = useState(() => PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)]!);
   const [repos, setRepos] = useState<ProjectRepository[]>([]);
+  const [goalIds, setGoalIds] = useState<string[]>([]);
   const [connecting, setConnecting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const create = useMutation({
-    mutationFn: () => projectsApi.create(companyId, { name: name.trim(), color, status: "planned", repositoryIds: repos.map((repo) => repo.id) }),
+    mutationFn: () => projectsApi.create(companyId, { name: name.trim(), color, status: "planned", repositoryIds: repos.map((repo) => repo.id),
+      ...(goalIds.length ? { goalIds } : {}) }),
     onSuccess: (project) => {
       trackRecentProject(project.id, companyId);
       void client.invalidateQueries({ queryKey: queryKeys.projects.all(companyId) });
@@ -57,8 +60,11 @@ export function NewProjectForm({ companyId, onClose }: { companyId: string; onCl
               className="h-10 w-full min-w-0 border-0 bg-transparent text-base outline-none placeholder:text-muted-foreground md:text-sm" />
           </div>
         </div>
-        <div role="region" aria-label="Source repositories" tabIndex={0} className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-1 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
-          <ProjectRepositoryInput companyId={companyId} selected={repos} onChange={setRepos} onConnect={() => setConnecting(true)} disabled={create.isPending} />
+        <div tabIndex={0} className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-1 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
+          <div role="region" aria-label="Source repositories">
+            <ProjectRepositoryInput companyId={companyId} selected={repos} onChange={setRepos} onConnect={() => setConnecting(true)} disabled={create.isPending} />
+          </div>
+          <NewProjectGoals companyId={companyId} selected={goalIds} onChange={setGoalIds} disabled={create.isPending} />
         </div>
         {create.isError && <p role="alert" className="px-5 pt-3 text-sm text-destructive">{create.error.message}</p>}
         <div className="flex shrink-0 justify-end gap-2 px-5 py-5">

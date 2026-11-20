@@ -121,3 +121,17 @@ export function splitGoalTitle(title: string): GoalTitleParts {
   if (!match) return { label: trimmed, detail: null };
   return { label: match[1], detail: match[2] };
 }
+
+// Show the ancestor path so identically named KRs remain distinguishable.
+// A malformed cycle must not hang the configuration page.
+export function goalPath(goal: Goal, byId: Map<string, Goal>): string {
+  const titles = [goal.title];
+  const seen = new Set([goal.id]);
+  let parent = goal.parentId ? byId.get(goal.parentId) : undefined;
+  while (parent && !seen.has(parent.id)) {
+    seen.add(parent.id);
+    titles.unshift(parent.title);
+    parent = parent.parentId ? byId.get(parent.parentId) : undefined;
+  }
+  return titles.join(" / ");
+}
