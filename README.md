@@ -1,3 +1,28 @@
+> ## About this fork
+>
+> **Paperclip the World** is a fork of [paperclipai/paperclip](https://github.com/paperclipai/paperclip),
+> an open-source console for running a company of AI agents.
+>
+> Upstream models **one company**: an org chart, a budget, a set of goals, and the agents that
+> work toward them. This fork asks what happens when one company is no longer the outer
+> boundary — when the unit of simulation is a **world**.
+>
+> A world has many organizations in it, and they are not all the same kind of thing. Companies
+> compete and trade. Institutions regulate. Nations set the rules that companies operate under.
+> Households and individuals sit at the bottom and absorb the consequences. Each has its own
+> incentives, its own clock, and its own idea of what counts as success — and the interesting
+> behavior lives in the friction between them, not inside any one of them.
+>
+> So the direction here is to grow the data model and the UI outward: from a single org chart to
+> many coexisting organizations, from one budget to economies that exchange value, from one set
+> of goals to goals that genuinely conflict. The structures are borrowed from how human societies
+> are actually arranged, because that is the most thoroughly tested design we have for getting
+> large numbers of self-interested agents to produce something collectively.
+>
+> Everything upstream does still works. This is an extension of its scope, not a replacement.
+
+<br/>
+
 <p align="center">
   <img src="doc/assets/banner.jpg" alt="Paperclip is the app people use to manage AI agents for work." width="720" />
 </p>
@@ -579,7 +604,23 @@ We welcome contributions. See the [contributing guide](CONTRIBUTING.md) for deta
 
 ## License
 
-MIT &copy; 2026 [Paperclip Labs, Inc](https://paperclip.ing)
+MIT.
+
+- Upstream Paperclip: `Copyright (c) 2025 Paperclip AI` — MIT &copy; [Paperclip Labs, Inc](https://paperclip.ing)
+- Changes in this fork: `Copyright (c) 2026 Kai Zhao`
+
+The upstream copyright notice and the MIT permission notice are retained in
+[LICENSE](LICENSE), unmodified, as that license requires.
+
+## Relationship to upstream
+
+This fork tracks [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and keeps its
+full commit history, so upstream changes can continue to be merged in. Commits authored upstream
+keep their original authorship.
+
+The changes made here are not submitted to upstream by default, and nothing in this fork should be
+taken as accepted by, endorsed by, or representative of the upstream project. Use upstream's
+issue tracker for upstream bugs, and this repository's for anything specific to the fork.
 
 ## Star History
 
