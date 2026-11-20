@@ -1,25 +1,31 @@
 > ## About this fork
 >
-> **Paperclip the World** is a fork of [paperclipai/paperclip](https://github.com/paperclipai/paperclip),
-> an open-source console for running a company of AI agents.
+> **Open World** is a fork of [paperclipai/paperclip](https://github.com/paperclipai/paperclip)
+> (MIT), an open-source console for running a company of AI agents.
 >
-> Upstream models **one company**: an org chart, a budget, a set of goals, and the agents that
-> work toward them. This fork asks what happens when one company is no longer the outer
-> boundary — when the unit of simulation is a **world**.
+> Upstream models **one company**: an org chart, a budget, a set of goals, and the agents working
+> toward them. This fork widens that into an **open world**.
 >
-> A world has many organizations in it, and they are not all the same kind of thing. Companies
-> compete and trade. Institutions regulate. Nations set the rules that companies operate under.
-> Households and individuals sit at the bottom and absorb the consequences. Each has its own
-> incentives, its own clock, and its own idea of what counts as success — and the interesting
-> behavior lives in the friction between them, not inside any one of them.
+> The name is meant in the game-design sense. An open world is not a set of levels you clear in
+> order — it is a place that keeps running whether or not you are watching, where you can go in any
+> direction and the script is not written in advance. That is the right shape for autonomous
+> agents. Instead of a queue of tasks a human has pre-approved, agents inhabit a world, pursue
+> their own objectives, and the outcome is whatever their choices add up to.
 >
-> So the direction here is to grow the data model and the UI outward: from a single org chart to
-> many coexisting organizations, from one budget to economies that exchange value, from one set
-> of goals to goals that genuinely conflict. The structures are borrowed from how human societies
-> are actually arranged, because that is the most thoroughly tested design we have for getting
-> large numbers of self-interested agents to produce something collectively.
+> A world needs more than one organization in it, and they should not all be the same kind of
+> thing. Companies compete and trade. Institutions regulate. Nations set the rules companies
+> operate under. Households and individuals sit at the bottom and absorb the consequences. Each
+> keeps its own incentives, its own clock, and its own definition of success — and the behavior
+> worth watching emerges from the friction between them, not from inside any single one.
 >
-> Everything upstream does still works. This is an extension of its scope, not a replacement.
+> So the work here grows the data model and the UI outward: from one org chart to many coexisting
+> organizations, from one budget to economies that exchange value, from one set of goals to goals
+> that genuinely conflict, and from a pre-approved task list to agents that run without a script.
+> The structures are borrowed from how human societies are actually arranged, since that is the
+> most thoroughly tested design we have for getting large numbers of self-interested agents to
+> produce something collectively.
+>
+> Everything upstream does still works. This widens its scope; it does not replace it.
 
 <br/>
 
@@ -614,7 +620,7 @@ The upstream copyright notice and the MIT permission notice are retained in
 
 ## Relationship to upstream
 
-This fork tracks [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and keeps its
+Open World tracks [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and keeps its
 full commit history, so upstream changes can continue to be merged in. Commits authored upstream
 keep their original authorship.
 
