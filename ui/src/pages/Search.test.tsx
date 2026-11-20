@@ -406,8 +406,8 @@ describe("Search page", () => {
             {
               field: "comment",
               label: "Comment",
-              text: "thread needle evidence",
-              highlights: [{ start: 7, end: 13 }],
+              text: "thread **needle** evidence",
+              highlights: [{ start: 9, end: 15 }],
             },
           ],
           issue: {
@@ -437,8 +437,8 @@ describe("Search page", () => {
             {
               field: "document",
               label: "Plan",
-              text: "plan needle evidence",
-              highlights: [{ start: 5, end: 11 }],
+              text: "plan [needle](https://example.com) evidence",
+              highlights: [{ start: 6, end: 12 }],
             },
           ],
           issue: {
@@ -466,6 +466,10 @@ describe("Search page", () => {
       expect(container.textContent).toContain("Comment");
       expect(container.textContent).toContain("Doc");
       expect(container.querySelectorAll("mark")).toHaveLength(2);
+      expect(Array.from(container.querySelectorAll("mark")).map(mark => mark.textContent)).toEqual(["needle", "needle"]);
+      expect(container.textContent).not.toContain("**needle**");
+      expect(container.textContent).not.toContain("https://example.com");
+      expect(container.querySelector("a a")).toBeNull();
     });
 
     flushSync(() => {

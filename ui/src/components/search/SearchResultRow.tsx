@@ -7,6 +7,7 @@ import { Link } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { StatusIcon } from "../StatusIcon";
 import { Identity } from "../Identity";
+import { MarkdownSnippet } from "./MarkdownSnippet";
 import { HighlightedText, type HighlightedTextProps } from "./HighlightedText";
 
 type SnippetStyle = {
@@ -261,7 +262,7 @@ function SnippetLine({ text, highlights, field, fallbackLabel, multiline = false
       >
         {label}
       </span>
-      <HighlightedText
+      <MarkdownSnippet
         text={text}
         highlights={highlights}
         className={multiline ? "line-clamp-2 leading-relaxed" : "line-clamp-1 truncate"}
