@@ -67,17 +67,23 @@ export function AgentBulkRoster({ companyId, agents, visibleAgents, renderAgent 
     </div>}
     {notice && <p role="status" className="flex items-center gap-2 text-sm"><Check className="size-4" aria-hidden />{notice}</p>}
     {accounts.error && <p className="text-xs text-destructive">Connection names couldn’t be loaded. <Button variant="link" size="sm" onClick={() => void accounts.refetch()}>Retry</Button></p>}
-    <div className="overflow-x-auto"><table aria-label="Agent roster" className="w-full text-left text-sm">
+    <div className="overflow-x-auto"><table aria-label="Agent roster" className="w-full table-fixed text-left text-sm">
       <thead className="text-xs text-muted-foreground [&_th]:px-3 [&_th]:py-3 [&_th]:font-normal"><tr>
         <th className="w-10"><Checkbox aria-label="Select all visible editable agents" checked={all ? true : some ? "indeterminate" : false} disabled={!selectable.length} onCheckedChange={toggleAll} /></th>
-        <th>Agent</th><th>Harness</th><th>Connection</th><th>Default model</th>
+        <th className="lg:w-2/5">Agent</th><th className="hidden w-28 lg:table-cell">Harness</th><th className="hidden w-1/5 lg:table-cell">Connection</th><th className="hidden lg:table-cell">Default model</th>
       </tr></thead>
       <tbody>{visible.map(agent => <tr key={agent.id} data-state={selected.includes(agent.id) ? "selected" : undefined} className="border-t border-border data-[state=selected]:bg-accent/30 [&_td]:px-3">
         <td title={bulkAgentDisabledReason(agent)}><Checkbox aria-label={`Select ${agent.name}`} checked={selectedAgents.some(a => a.id === agent.id)} disabled={!!bulkAgentDisabledReason(agent)} onCheckedChange={value => setSelected(value ? [...new Set([...selected, agent.id])] : selected.filter(id => id !== agent.id))} /></td>
-        <td className="min-w-64 p-0">{renderAgent(agent)}</td>
-        <td className="whitespace-nowrap text-xs">{getAdapterLabel(bulkAgentHarness(agent))}</td>
-        <td className="text-xs">{["http", "process"].includes(agent.adapterType) ? "Managed externally" : bulkConnectionName(agentConnection(agent), accounts.data)}</td>
-        <td className="font-mono text-xs">{agentDefaultModel(agent) ?? "Harness default"}</td>
+        <td className="min-w-0 p-0">
+          {renderAgent(agent)}
+          <div className="space-y-1 break-words px-4 pb-3 text-xs text-muted-foreground lg:hidden">
+            <div>{getAdapterLabel(bulkAgentHarness(agent))} · {agentDefaultModel(agent) ?? "Harness default"}</div>
+            <div>{["http", "process"].includes(agent.adapterType) ? "Managed externally" : bulkConnectionName(agentConnection(agent), accounts.data)}</div>
+          </div>
+        </td>
+        <td className="hidden text-xs lg:table-cell"><div className="truncate" title={getAdapterLabel(bulkAgentHarness(agent))}>{getAdapterLabel(bulkAgentHarness(agent))}</div></td>
+        <td className="hidden break-words text-xs lg:table-cell">{["http", "process"].includes(agent.adapterType) ? "Managed externally" : bulkConnectionName(agentConnection(agent), accounts.data)}</td>
+        <td className="hidden break-words font-mono text-xs lg:table-cell">{agentDefaultModel(agent) ?? "Harness default"}</td>
       </tr>)}</tbody>
     </table></div>
     {!visible.length && <p className="py-8 text-center text-sm text-muted-foreground">No agents match these filters.</p>}
