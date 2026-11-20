@@ -27,6 +27,7 @@ import { EnvironmentVariablesEditor } from "./environment-variables-editor";
 import { Badge } from "@/components/ui/badge";
 import { ProjectAccessMembers } from "./ProjectAccessMembers";
 import { ProjectGoalsField } from "./ProjectGoalsField";
+import { ProjectParentField } from "./ProjectParentField";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 
@@ -47,6 +48,7 @@ export type ProjectConfigFieldKey =
   | "status"
   | "visibility"
   | "goals"
+  | "parentProjectId"
   | "env"
   | "workspace_storage_provider"
   | "execution_workspace_enabled"
@@ -508,6 +510,10 @@ export function ProjectProperties({ project, repositories, onUpdate, onFieldUpda
             </p>
             {project.visibility === "private" ? <ProjectAccessMembers project={project} canManage={canManagePrivacy} /> : null}
           </div>
+        </PropertyRow>
+        <PropertyRow label={<FieldLabel label="Parent project" state={fieldState("parentProjectId")} />} alignStart>
+          <ProjectParentField key={project.id} project={project} onSave={onUpdate || onFieldUpdate
+            ? parentProjectId => commitField("parentProjectId", { parentProjectId }) : undefined} />
         </PropertyRow>
         <PropertyRow label={<FieldLabel label="Goals" state={fieldState("goals")} />} alignStart>
           <ProjectGoalsField

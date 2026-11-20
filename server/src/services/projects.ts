@@ -647,6 +647,26 @@ async function ensureSinglePrimaryWorkspace(
     );
 }
 
+// All parent changes take this company-scoped lock before project row locks.
+// Checking only a snapshot would let concurrent A -> B / B -> A create a cycle.
+async function lockProjectHierarchy(db: Db, companyId: string) {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`project-hierarchy:${companyId}`}, 0))`);
+}
+
+async function assertProjectParent(db: Db, companyId: string, projectId: string | undefined, parentId: string | null | undefined) {
+  if (!parentId) return;
+  const ancestors = await db.execute(sql`with recursive ancestors as (
+    select id, parent_project_id from projects where id = ${parentId} and company_id = ${companyId}
+    union
+    select p.id, p.parent_project_id from projects p join ancestors a on p.id = a.parent_project_id
+      where p.company_id = ${companyId}
+  ) select id from ancestors`);
+  if (!ancestors.length) throw unprocessable("Parent project must belong to this company");
+  if (projectId && ancestors.some(row => row.id === projectId)) {
+    throw unprocessable("Project hierarchy cannot contain a cycle");
+  }
+}
+
 export function projectService(db: Db, options: { captureWorkspaceUpdates?: boolean } = {}) {
   const createProject = async (
     companyId: string,
@@ -674,6 +694,10 @@ export function projectService(db: Db, options: { captureWorkspaceUpdates?: bool
 
     return db.transaction(async (tx) => {
       const txDb = tx as unknown as Db;
+      if (projectData.parentProjectId) {
+        await lockProjectHierarchy(txDb, companyId);
+        await assertProjectParent(txDb, companyId, projectData.id, projectData.parentProjectId);
+      }
       const row = await tx
         .insert(projects)
         .values({ ...projectData, goalId: legacyGoalId, companyId })
@@ -971,6 +995,12 @@ export function projectService(db: Db, options: { captureWorkspaceUpdates?: bool
       const db = tx as unknown as Db;
       const { goalIds: inputGoalIds, ...projectData } = data;
       const ids = resolveGoalIds({ goalIds: inputGoalIds, goalId: projectData.goalId });
+      if (projectData.parentProjectId !== undefined) {
+        const [scope] = await db.select({ companyId: projects.companyId }).from(projects).where(eq(projects.id, id));
+        if (!scope) return null;
+        await lockProjectHierarchy(db, scope.companyId);
+        await assertProjectParent(db, scope.companyId, id, projectData.parentProjectId);
+      }
       const existingProject = await db
         .select({ id: projects.id, companyId: projects.companyId, name: projects.name, archivedAt: projects.archivedAt, executionWorkspacePolicy: projects.executionWorkspacePolicy })
         .from(projects)

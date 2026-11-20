@@ -196,6 +196,28 @@ describe("Projects", () => {
     expect(container.querySelector('img[src="x"]')).toBeNull();
   });
 
+  it("nests projects, collapses descendants and finds a child even when its parent is collapsed", async () => {
+    mockProjectsApi.list.mockResolvedValue([
+      makeProject({ id: "child", name: "Child", urlKey: "child", parentProjectId: "parent" }),
+      makeProject({ id: "parent", name: "Parent", urlKey: "parent" }),
+    ]);
+    await renderProjects();
+    const names = () => Array.from(container.querySelectorAll("a")).map(link => link.textContent);
+    expect(names()[0]).toContain("Parent");
+    expect(names()[1]).toContain("Child");
+    const collapse = container.querySelector<HTMLButtonElement>('button[aria-label="Collapse Parent"]')!;
+    await act(() => collapse.click());
+    expect(names()).toHaveLength(1);
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Search projects"]')!;
+    await act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "child");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(names()).toHaveLength(1);
+    expect(names()[0]).toContain("Child");
+    expect(names()[0]).toContain("in Parent");
+  });
+
   async function openSortMenu() {
     const trigger = container.querySelector<HTMLButtonElement>('button[title="Sort"]');
     expect(trigger).not.toBeNull();

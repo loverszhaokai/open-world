@@ -25,6 +25,8 @@ import { ProjectsToolbar, type ProjectSortField, type ProjectSortDir } from "@/c
 import { Hexagon } from "lucide-react";
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { projectAncestorPath, projectHierarchyRows } from "../lib/project-hierarchy";
 
 function compareProjectNames(left: Project, right: Project) {
   const nameDiff = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
@@ -74,6 +76,7 @@ export function Projects() {
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<ProjectSortField>("name");
   const [sortDir, setSortDir] = useState<ProjectSortDir>("asc");
+  const [collapsed, setCollapsed] = useState(new Set<string>());
 
   useEffect(() => {
     setBreadcrumbs([{ label: "Projects" }]);
@@ -90,6 +93,7 @@ export function Projects() {
     () => allProjects ?? [],
     [allProjects],
   );
+  const projectsById = useMemo(() => new Map(projects.map(project => [project.id, project])), [projects]);
   const sortedProjects = useMemo(
     () => {
       const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
@@ -159,7 +163,7 @@ export function Projects() {
                   </span>
                 </div>
                 <Card className="block py-0 overflow-hidden divide-y divide-border">
-                  {sectionProjects.map((project) => {
+                  {projectHierarchyRows(sectionProjects, query.trim() ? new Set<string>() : collapsed).map(({ project, depth, hasChildren }) => {
                     const state = resourceMembershipState(membershipsQuery.data, "project", project.id);
                     const pending = membershipMutation.isPending &&
                       membershipMutation.variables?.resourceType === "project" &&
@@ -168,14 +172,27 @@ export function Projects() {
                     const joinLeavePending = pending && membershipMutation.variables?.starred === undefined;
                     const starred = isStarred(membershipsQuery.data, "project", project.id);
                     return (
+                      <div key={project.id} className="flex min-w-0 items-center" style={{ paddingInlineStart: Math.min(depth, 4) * 16 }}>
+                        {hasChildren ? <button type="button" className="shrink-0 p-2 text-muted-foreground"
+                          aria-label={`${collapsed.has(project.id) && !query.trim() ? "Expand" : "Collapse"} ${project.name}`}
+                          aria-expanded={!collapsed.has(project.id) || !!query.trim()}
+                          disabled={!!query.trim()}
+                          onClick={() => setCollapsed(previous => {
+                            const next = new Set(previous);
+                            if (next.has(project.id)) next.delete(project.id); else next.add(project.id);
+                            return next;
+                          })}>
+                          {collapsed.has(project.id) && !query.trim() ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+                        </button> : <span className="w-8 shrink-0" />}
                       <EntityRow
-                        key={project.id}
                         leading={<ProjectTile color={project.color ?? null} icon={project.icon ?? null} size="sm" />}
                         title={project.name}
+                        titleAccessory={depth === 0 && projectAncestorPath(project, projectsById)
+                          ? <span className="truncate text-xs text-muted-foreground">in {projectAncestorPath(project, projectsById)}</span> : undefined}
                         subtitle={project.description ? <MarkdownSummary>{project.description}</MarkdownSummary> : undefined}
                         reserveSubtitleSpace
                         to={projectUrl(project)}
-                        className={state === "left" ? "group text-foreground/55" : "group"}
+                        className={`group min-w-0 flex-1 ${state === "left" ? "text-foreground/55" : ""}`}
                         trailing={
                           <div className="flex items-center gap-3">
                             {project.visibility === "private" ? <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Private project" /> : null}
@@ -229,6 +246,7 @@ export function Projects() {
                           </div>
                         }
                       />
+                      </div>
                     );
                   })}
                 </Card>
