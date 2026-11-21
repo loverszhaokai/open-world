@@ -956,6 +956,22 @@ describe("openapi routes", () => {
     });
   });
 
+  it("documents revision and compare-and-swap requirements for HTML presentations", () => {
+    const { spec } = loadSpecRoutes();
+    const operation = spec.paths["/api/issues/{id}/documents/{key}/presentation"].put;
+    const body = operation.requestBody.content["application/json"].schema;
+    expect(body.additionalProperties).toBe(false);
+    expect(body.required).toEqual(expect.arrayContaining([
+      "documentRevisionId", "attachmentId", "attachmentSha256", "baseVersion",
+    ]));
+    expect(body.properties.documentRevisionId.format).toBe("uuid");
+    expect(body.properties.attachmentSha256.pattern).toBe("^[a-f0-9]{64}$");
+    for (const code of [200, 400, 401, 403, 404, 409, 422]) {
+      expect(operation.responses[String(code)]).toBeDefined();
+    }
+    expect(operation.description).toContain("frozen review evidence");
+  });
+
   it("covers the mounted server routes exactly", () => {
     const {
       routes: actualRoutes,

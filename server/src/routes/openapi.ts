@@ -79,6 +79,7 @@ import {
   createIssueWorkProductSchema,
   updateIssueWorkProductSchema,
   upsertIssueDocumentSchema,
+  setDocumentPresentationSchema,
   restoreIssueDocumentRevisionSchema,
   upsertIssueFeedbackVoteSchema,
   upsertIssueWatchdogSchema,
@@ -4563,6 +4564,27 @@ registry.registerPath({
   summary: "Delete an issue document",
   request: { params: z.object({ id: z.string(), key: z.string() }) },
   responses: { 200: r.ok(), 401: r.unauthorized },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/issues/{id}/documents/{key}/presentation",
+  tags: ["issues"],
+  summary: "Bind or unbind a document revision's HTML presentation",
+  description: "Requires issue read and mutation authority. Binds only same-issue HTML attachments of at most 2 MiB with the supplied SHA-256. The document must be unlocked, the revision current and without frozen review evidence, and baseVersion must match the existing presentation version (null for a first binding). Set attachmentId and attachmentSha256 both to null to unbind; historical attachments are retained.",
+  request: {
+    params: z.object({ id: z.string(), key: z.string() }),
+    body: jsonBody(setDocumentPresentationSchema),
+  },
+  responses: {
+    200: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+    409: r.conflict,
+    422: r.unprocessable,
+  },
 });
 
 registry.registerPath({
