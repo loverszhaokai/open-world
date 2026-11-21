@@ -1,3 +1,4 @@
+import { documentPresentations } from "@paperclipai/db";
 import { normalizeEscapedLineBreaks } from "@paperclipai/shared/validators/text";
 import { notifyDeliveryWork, DELIVERY_QUEUES } from "./delivery-work-notifications.js";
 import { historicalQuestionCondition } from "./issue-question-context.js";
@@ -1848,6 +1849,12 @@ async function assertRequestConfirmationTargetIsCurrent(
     throw unprocessable(
       "request_confirmation target must reference the current issue document revision",
     );
+  }
+  if (args.lockForUpdate) {
+    const [presentation] = await db.select({ hash: documentPresentations.attachmentSha256 })
+      .from(documentPresentations).where(and(eq(documentPresentations.documentId, snapshot.documentId),
+        eq(documentPresentations.documentRevisionId, args.target.revisionId)));
+    args.target.presentationSha256 = presentation?.hash ?? null;
   }
   if (
     args.target.revisionNumber &&

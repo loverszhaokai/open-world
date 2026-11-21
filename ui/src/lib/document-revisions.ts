@@ -33,6 +33,7 @@ function createCurrentRevisionSnapshot(document: IssueDocument): DocumentRevisio
     title: document.title,
     format: document.format,
     body: document.body,
+    presentation: document.presentation,
     changeSummary: null,
     createdByAgentId: document.updatedByAgentId ?? document.createdByAgentId,
     createdByUserId: document.updatedByUserId ?? document.createdByUserId,

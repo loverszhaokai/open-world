@@ -508,6 +508,7 @@ export {
   issueDocumentFormatSchema,
   issueDocumentKeySchema,
   upsertIssueDocumentSchema,
+  setDocumentPresentationSchema,
   restoreIssueDocumentRevisionSchema,
   upsertIssueWatchdogSchema,
   type CreateIssue,

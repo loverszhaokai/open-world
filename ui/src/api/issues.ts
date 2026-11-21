@@ -1,3 +1,4 @@
+import type { DocumentPresentation } from "@paperclipai/shared";
 import type { SetIssueTitle } from "@paperclipai/shared";
 import { ISSUE_SUMMARIES_MAX_IDS } from "@paperclipai/shared";
 import type { IssueSummary } from "@paperclipai/shared";
@@ -571,6 +572,9 @@ export const issuesApi = {
     api.delete<IssueComment>(`/issues/${id}/comments/${commentId}?mode=cancel`),
   deleteComment: (id: string, commentId: string) =>
     api.delete<IssueComment>(`/issues/${id}/comments/${commentId}`),
+  setDocumentPresentation: (id: string, key: string, input: {
+    documentRevisionId: string; attachmentId: string | null; attachmentSha256: string | null; baseVersion: string | null;
+  }) => api.put<DocumentPresentation>(`/issues/${id}/documents/${key}/presentation`, input),
   listDocuments: (id: string, options?: { includeSystem?: boolean }) =>
     api.get<IssueDocument[]>(
       `/issues/${id}/documents${options?.includeSystem ? "?includeSystem=true" : ""}`,

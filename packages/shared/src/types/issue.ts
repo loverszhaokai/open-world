@@ -153,7 +153,17 @@ export interface IssueAssigneeAdapterOverrides {
 
 export type DocumentFormat = "markdown";
 
+export interface DocumentPresentation {
+  documentRevisionId: string;
+  attachmentId: string | null;
+  attachmentSha256: string | null;
+  version: string;
+  kind: "html";
+}
+
 export interface IssueDocumentSummary {
+  presentation?: DocumentPresentation | null;
+  presentationStale?: boolean;
   id: string;
   companyId: string;
   issueId: string;
@@ -179,6 +189,7 @@ export interface IssueDocument extends IssueDocumentSummary {
 }
 
 export interface DocumentRevision {
+  presentation?: DocumentPresentation | null;
   id: string;
   companyId: string;
   documentId: string;
@@ -1342,6 +1353,8 @@ export interface AskUserQuestionsResult {
 }
 
 export interface RequestConfirmationIssueDocumentTarget {
+  /** Server-captured visual evidence for this exact revision. */
+  presentationSha256?: string | null;
   type: "issue_document";
   issueId?: string | null;
   documentId?: string | null;

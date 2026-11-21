@@ -22,13 +22,15 @@ API: `present` — representative operation IDs:
 
 - `GET /api/issues/{id}/documents`.
 - `PUT /api/issues/{id}/documents/{key}`.
+- `PUT /api/issues/{id}/documents/{key}/presentation` — revision/hash/version-fenced bind or unbind; REST plus `scripts/document-presentations/deliver.mjs`. Dedicated native helper not yet added.
 - `POST /api/issues/{id}/documents/{key}/revisions/{revisionId}/restore`.
 
 Agent access: `available` — Native list/read/write documents; other-task bridge; REST /
 CLI / MCP.
 
 Policy: Task/resource visibility, mutation/checkout ownership, revision/lock guards and
-permitted deliverable context.
+permitted deliverable context. Presentation attachments must belong to the same task/company.
+Locked and previously reviewed revisions reject changes; historical bindings stay immutable.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L10299) at
 the reviewed commit above.
@@ -55,7 +57,8 @@ API: `present` — representative operation IDs:
 Agent access: `available` — REST / native call_api.
 
 Policy: Task/resource visibility, mutation/checkout ownership, revision/lock guards and
-permitted deliverable context.
+permitted deliverable context. Presentation attachments must belong to the same task/company.
+Locked and previously reviewed revisions reject changes; historical bindings stay immutable.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L10299) at
 the reviewed commit above.
@@ -83,7 +86,8 @@ Agent access: `available` — Native register_deliverable and API multipart/bina
 support; REST / CLI / MCP transfers.
 
 Policy: Task/resource visibility, mutation/checkout ownership, revision/lock guards and
-permitted deliverable context.
+permitted deliverable context. Presentation attachments must belong to the same task/company.
+Locked and previously reviewed revisions reject changes; historical bindings stay immutable.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L10299) at
 the reviewed commit above.
@@ -115,7 +119,8 @@ Agent access: `available` — Native register_deliverable for file outputs; REST
 call_api for metadata.
 
 Policy: Task/resource visibility, mutation/checkout ownership, revision/lock guards and
-permitted deliverable context.
+permitted deliverable context. Presentation attachments must belong to the same task/company.
+Locked and previously reviewed revisions reject changes; historical bindings stay immutable.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L10299) at
 the reviewed commit above.
@@ -141,7 +146,8 @@ API: `present` — representative operation IDs:
 Agent access: `available` — REST / native call_api.
 
 Policy: Task/resource visibility, mutation/checkout ownership, revision/lock guards and
-permitted deliverable context.
+permitted deliverable context. Presentation attachments must belong to the same task/company.
+Locked and previously reviewed revisions reject changes; historical bindings stay immutable.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L10299) at
 the reviewed commit above.

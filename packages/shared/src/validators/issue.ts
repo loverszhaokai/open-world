@@ -1560,6 +1560,7 @@ const requestConfirmationTargetBaseSchema = z.object({
 export const requestConfirmationIssueDocumentTargetSchema =
   requestConfirmationTargetBaseSchema.extend({
     type: z.literal("issue_document"),
+    presentationSha256: z.string().regex(/^[a-f0-9]{64}$/).nullable().optional(),
     issueId: z.string().guid().nullable().optional(),
     documentId: z.string().guid().nullable().optional(),
     key: issueDocumentKeySchema,
@@ -2273,3 +2274,13 @@ export type UpsertIssueDocument = z.infer<typeof upsertIssueDocumentSchema>;
 export type RestoreIssueDocumentRevision = z.infer<
   typeof restoreIssueDocumentRevisionSchema
 >;
+
+// Explicit null is required on first bind. Unbinding preserves a version token.
+export const setDocumentPresentationSchema = z.object({
+  documentRevisionId: z.string().uuid(),
+  attachmentId: z.string().uuid().nullable(),
+  attachmentSha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+  baseVersion: z.string().uuid().nullable(),
+}).strict().refine((v) => (v.attachmentId === null) === (v.attachmentSha256 === null), {
+  message: "Attachment and SHA-256 must both be provided or both null",
+});

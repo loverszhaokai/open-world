@@ -4822,3 +4822,17 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
     transform: rotate(calc(var(--artifact-base, 0deg) - 5deg));
   }
 }
+
+/* Bounded document diagrams; no cross-origin resize bridge is needed. */
+:root {
+  --document-presentation-height: 28rem;
+  --document-presentation-expanded-height: 80vh;
+}
+.document-presentation-frame {
+  height: var(--document-presentation-height);
+  max-height: var(--document-presentation-expanded-height);
+  overflow: hidden;
+}
+.document-presentation-frame-expanded {
+  height: var(--document-presentation-expanded-height);
+}

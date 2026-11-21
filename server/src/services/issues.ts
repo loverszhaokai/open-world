@@ -1,3 +1,4 @@
+import { documentPresentations } from "@paperclipai/db";
 import { insertIssueComment } from "./issue-comment-writes.js";
 import { measureRunTransaction } from "./execution-transaction-timing.js";
 import { readNativeMonitorSource } from "./native-runtime/native-monitor-delivery.js";
@@ -11694,6 +11695,14 @@ export function issueService(db: Db) {
           .from(issueDocuments)
           .where(eq(issueDocuments.issueId, id));
 
+        // Task deletion removes its entire report history atomically. Remove the
+        // visual references before cascading attachment deletion; rollback restores
+        // them if another task-deletion constraint rejects the operation.
+        if (issueDocumentIds.length > 0) {
+          await tx.delete(documentPresentations).where(inArray(documentPresentations.documentId,
+            issueDocumentIds.map((row) => row.documentId)));
+        }
+
         let removedIssue;
         try {
           await notifyTerminalWorkspaceWork(tx, `issue:${id}`);
@@ -13484,9 +13493,13 @@ export function issueService(db: Db) {
           .from(issueAttachments)
           .innerJoin(assets, eq(issueAttachments.assetId, assets.id))
           .where(eq(issueAttachments.id, id))
+          .for("update", { of: issueAttachments })
           .then((rows) => rows[0] ?? null);
         if (!existing) return null;
 
+        const [reference] = await tx.select({ id: documentPresentations.id }).from(documentPresentations)
+          .where(eq(documentPresentations.attachmentId, id)).limit(1);
+        if (reference) throw conflict("Attachment is referenced by a document presentation; unbind it first");
         await tx.delete(issueAttachments).where(eq(issueAttachments.id, id));
         await tx.delete(assets).where(eq(assets.id, existing.assetId));
         return existing;

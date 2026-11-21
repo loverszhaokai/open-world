@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
 import express from "express";
@@ -546,6 +547,20 @@ describe("issue attachment routes", () => {
     expect(res.headers["content-type"]).toContain("application/x-msdownload");
     expect(res.headers["content-disposition"]).toBe('attachment; filename="payload.exe"');
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("verifies actual diagram bytes and keeps successful reads as downloads", async () => {
+    const bytes = Buffer.from("<h1>Diagram</h1>");
+    const storage = createStorageService(bytes);
+    mockIssueService.getAttachmentById.mockResolvedValue({ ...makeAttachment("text/html", "visual.html"), byteSize: bytes.length });
+    const app = await createApp(storage);
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const good = await request(app).get(`/api/attachments/attachment-1/content?expectedSha256=${hash}`);
+    expect(good.status).toBe(200);
+    expect(good.headers["content-disposition"]).toContain("attachment;");
+    expect(good.headers["cache-control"]).toBe("no-store");
+    const bad = await request(app).get(`/api/attachments/attachment-1/content?expectedSha256=${"0".repeat(64)}`);
+    expect(bad.status).toBe(409);
   });
 
   it("declares utf-8 for inline markdown attachments", async () => {

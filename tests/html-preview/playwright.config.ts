@@ -3,7 +3,9 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: ".",
   outputDir: "./test-results",
-  timeout: 60_000,
+  timeout: 90_000,
+  // Cold Storybook modules can take longer than the default 5s assertion budget.
+  expect: { timeout: 30_000 },
   workers: 1,
   reporter: "list",
   use: { browserName: "chromium", baseURL: "http://127.0.0.1:6189", viewport: { width: 1200, height: 900 } },

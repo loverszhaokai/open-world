@@ -1,3 +1,4 @@
+import { documentPresentations } from "@paperclipai/db";
 import { buffer } from "node:stream/consumers";
 import { and, desc, eq, inArray, isNotNull, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -364,7 +365,9 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
               isNotNull(documentMemberships.starredAt),
             ]
             : [
-              or(isNotNull(documents.createdByAgentId), isNotNull(documents.updatedByAgentId))!,
+              or(isNotNull(documents.createdByAgentId), isNotNull(documents.updatedByAgentId),
+                sql`EXISTS (SELECT 1 FROM ${documentPresentations} dp WHERE dp.document_id = ${documents.id}
+                  AND dp.document_revision_id = ${documents.latestRevisionId} AND dp.attachment_id IS NOT NULL)`)!,
               notInArray(issueDocuments.key, [...SYSTEM_ISSUE_DOCUMENT_KEYS]),
             ]),
         ];
@@ -479,6 +482,8 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
         const workProductArtifactId = sql<string>`concat('work_product:', ${issueWorkProducts.id})`;
         const workProductContentType = sql<string>`coalesce(${issueWorkProducts.metadata}->>'contentType', '')`;
         const workProductBaseConditions: SQL[] = [
+          sql`NOT EXISTS (SELECT 1 FROM ${documentPresentations} dp JOIN ${documents} d ON d.id = dp.document_id
+            WHERE dp.attachment_id::text = ${issueWorkProducts.metadata}->>'attachmentId' AND dp.document_revision_id = d.latest_revision_id)`,
           eq(issueWorkProducts.companyId, companyId),
           eq(issueWorkProducts.type, "artifact"),
           eq(issueWorkProducts.provider, "paperclip"),
@@ -619,6 +624,8 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
         const attachmentAgent = alias(agents, "attachment_agent");
         const attachmentArtifactId = sql<string>`concat('attachment:', ${issueAttachments.id})`;
         const attachmentConditions: SQL[] = [
+          sql`NOT EXISTS (SELECT 1 FROM ${documentPresentations} dp JOIN ${documents} d ON d.id = dp.document_id
+            WHERE dp.attachment_id = ${issueAttachments.id} AND dp.document_revision_id = d.latest_revision_id)`,
           eq(issueAttachments.companyId, companyId),
           isNull(issueAttachments.issueCommentId),
           isNotNull(assets.createdByAgentId),

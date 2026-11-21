@@ -1488,12 +1488,10 @@ function isDisplayableRequestConfirmationTarget(
 }
 
 function requestConfirmationTargetLabel(target: RequestConfirmationTarget) {
-  if (target.label) return target.label;
   const revision = target.revisionNumber ? ` v${target.revisionNumber}` : "";
-  if (target.type === "issue_document" && target.key === "plan") {
-    return `Plan${revision}`;
-  }
-  return `${target.key}${revision}`;
+  const label = target.label ?? (target.type === "issue_document" && target.key === "plan" ? `Plan${revision}` : `${target.key}${revision}`);
+  return target.type === "issue_document" && target.presentationSha256
+    ? `${label} · Diagram SHA-256 ${target.presentationSha256}` : label;
 }
 
 function requestConfirmationTargetHref({

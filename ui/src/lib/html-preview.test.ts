@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HTML_PREVIEW_CSP, htmlPreviewDocument, isHtmlPreview } from "./html-preview";
+import { HTML_PREVIEW_CSP, htmlPreviewDocument, htmlPreviewSandboxDocument, isHtmlPreview } from "./html-preview";
 import { isTextAttachment } from "./issue-attachments";
 
 describe("HTML artifact previews", () => {
@@ -22,4 +22,21 @@ describe("HTML artifact previews", () => {
     expect(doc).not.toContain("script-src 'self'");
     expect(doc).not.toContain("unsafe-eval");
   });
+  it("keeps document diagrams self-contained even with hostile base and embed markup", () => {
+    const rendered = htmlPreviewDocument('<base href="https://attacker.invalid"><iframe src="https://attacker.invalid"></iframe>');
+    expect(rendered).toContain("default-src 'none'");
+    expect(rendered).toContain("object-src 'none'");
+    expect(rendered).toContain("img-src data:");
+    expect(rendered).not.toContain("allow-same-origin");
+  });
+
+  it("keeps untrusted markup inside an escaped inner frame", () => {
+    const wrapper = htmlPreviewSandboxDocument('"></iframe><script>parent.document.cookie</script>');
+    expect(wrapper.match(/<iframe /g)).toHaveLength(1);
+    expect(wrapper).not.toContain("<script>");
+    expect(wrapper).toContain('sandbox="allow-scripts"');
+    expect(wrapper).toContain("frame-src 'none'");
+    expect(wrapper).toContain("&lt;script>");
+  });
+
 });

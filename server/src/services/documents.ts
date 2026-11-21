@@ -1,3 +1,4 @@
+import { documentPresentationService, presentationMetadata } from "./document-presentations.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -109,6 +110,15 @@ export const issueDocumentSelect = {
 };
 
 export function documentService(db: Db) {
+  const presentations = documentPresentationService(db);
+  async function withPresentations<T extends { id: string; latestRevisionId: string | null }>(rows: T[]) {
+    const bindings = await presentations.list(rows.map((row) => row.id));
+    return rows.map((row) => ({ ...row,
+      presentation: (() => { const match = bindings.find((b) => b.documentId === row.id && b.documentRevisionId === row.latestRevisionId); return match ? presentationMetadata(match) : null; })(),
+      presentationStale: bindings.some((b) => b.documentId === row.id && b.attachmentId !== null)
+        && !bindings.some((b) => b.documentId === row.id && b.documentRevisionId === row.latestRevisionId),
+    }));
+  }
   const filterSystemDocuments = <T extends { key: string }>(rows: T[], includeSystem: boolean) =>
     includeSystem ? rows : rows.filter((row) => !isSystemIssueDocumentKey(row.key));
 
@@ -135,9 +145,9 @@ export function documentService(db: Db) {
       const legacyPlanBody = planDocument ? null : extractLegacyPlanBody(issue.description);
 
       return {
-        planDocument: planDocument ? mapIssueDocumentRow(planDocument, true) : null,
-        documentSummaries: filterSystemDocuments(documentSummaries, options.includeSystem ?? false)
-          .map((row) => mapIssueDocumentRow(row, false)),
+        planDocument: planDocument ? (await withPresentations([mapIssueDocumentRow(planDocument, true)]))[0] : null,
+        documentSummaries: await withPresentations(filterSystemDocuments(documentSummaries, options.includeSystem ?? false)
+          .map((row) => mapIssueDocumentRow(row, false))),
         legacyPlanDocument: legacyPlanBody
           ? {
               key: "plan" as const,
@@ -155,7 +165,7 @@ export function documentService(db: Db) {
         .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
         .where(eq(issueDocuments.issueId, issueId))
         .orderBy(asc(issueDocuments.key), desc(documents.updatedAt));
-      return filterSystemDocuments(rows, options.includeSystem ?? false).map((row) => mapIssueDocumentRow(row, true));
+      return withPresentations(filterSystemDocuments(rows, options.includeSystem ?? false).map((row) => mapIssueDocumentRow(row, true)));
     },
 
     getIssueDocumentByKey: async (issueId: string, rawKey: string) => {
@@ -166,12 +176,12 @@ export function documentService(db: Db) {
         .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
         .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
         .then((rows) => rows[0] ?? null);
-      return row ? mapIssueDocumentRow(row, true) : null;
+      return row ? (await withPresentations([mapIssueDocumentRow(row, true)]))[0] : null;
     },
 
     listIssueDocumentRevisions: async (issueId: string, rawKey: string) => {
       const key = normalizeDocumentKey(rawKey);
-      return db
+      const rows = await db
         .select({
           id: documentRevisions.id,
           companyId: documentRevisions.companyId,
@@ -193,6 +203,11 @@ export function documentService(db: Db) {
         .innerJoin(documentRevisions, eq(documentRevisions.documentId, documents.id))
         .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
         .orderBy(desc(documentRevisions.revisionNumber));
+      const bindings = await presentations.list([...new Set(rows.map((r) => r.documentId))]);
+      return rows.map((row) => ({ ...row, presentation: (() => {
+        const match = bindings.find((b) => b.documentRevisionId === row.id);
+        return match ? presentationMetadata(match) : null;
+      })() }));
     },
 
     upsertIssueDocument: async (input: {
@@ -247,6 +262,7 @@ export function documentService(db: Db) {
             .from(issueDocuments)
             .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
             .where(and(eq(issueDocuments.issueId, issue.id), eq(issueDocuments.key, key)))
+            .for("update", { of: documents })
             .then((rows) => rows[0] ?? null);
 
           if (existing) {
@@ -595,6 +611,7 @@ export function documentService(db: Db) {
           .from(issueDocuments)
           .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
           .where(and(eq(issueDocuments.issueId, input.issueId), eq(issueDocuments.key, key)))
+          .for("update", { of: documents })
           .then((rows) => rows[0] ?? null);
 
         if (!existing) throw notFound("Document not found");
@@ -695,6 +712,7 @@ export function documentService(db: Db) {
           .from(issueDocuments)
           .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
           .where(and(eq(issueDocuments.issueId, input.issueId), eq(issueDocuments.key, key)))
+          .for("update", { of: documents })
           .then((rows) => rows[0] ?? null);
 
         if (!existing) throw notFound("Document not found");
@@ -742,6 +760,7 @@ export function documentService(db: Db) {
           .from(issueDocuments)
           .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
           .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
+          .for("update", { of: documents })
           .then((rows) => rows[0] ?? null);
 
         if (!existing) throw notFound("Document not found");
@@ -789,6 +808,7 @@ export function documentService(db: Db) {
           .from(issueDocuments)
           .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
           .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
+          .for("update", { of: documents })
           .then((rows) => rows[0] ?? null);
 
         if (!existing) return null;

@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { htmlPreviewDocument } from "@/lib/html-preview";
+import { htmlPreviewSandboxDocument } from "@/lib/html-preview";
 
 export function HtmlArtifactPreview({ html, title }: { html: string; title: string }) {
-  const srcDoc = useMemo(() => htmlPreviewDocument(html), [html]);
+  const srcDoc = useMemo(() => htmlPreviewSandboxDocument(html), [html]);
   return (
     <iframe
       title={`${title} rendered HTML`}

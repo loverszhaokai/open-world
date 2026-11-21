@@ -1,3 +1,5 @@
+import { documentPresentationService } from "../services/document-presentations.js";
+import { setDocumentPresentationSchema } from "@paperclipai/shared";
 import { taskInterruptionPresentation, taskInterruptionPresentations } from "../services/task-interruption-presentation.js";
 import { parseObject } from "../adapters/utils.js";
 import { prepareRestrictedWorkspaceRetry } from "../services/restricted-workspace-retry.js";
@@ -10731,6 +10733,18 @@ export function issueRoutes(
     },
   );
 
+  router.put("/issues/:id/documents/:key/presentation", validate(setDocumentPresentationSchema), async (req, res) => {
+    const issue = await getAccessibleResource(req, res, svc.getById(req.params.id as string), "Issue not found");
+    if (!issue) return;
+    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;
+    if (!(await assertDeliverableMutationAllowedByRunContext(req, res, issue))) return;
+    const key = issueDocumentKeySchema.parse(String(req.params.key).trim().toLowerCase());
+    const presentation = await documentPresentationService(db).set({ ...req.body, key,
+      issueId: issue.id, companyId: issue.companyId, actor: getActorInfo(req) });
+    res.json(presentation);
+  });
+
   router.put(
     "/issues/:id/documents/:key",
     validate(upsertIssueDocumentSchema),
@@ -19598,6 +19612,32 @@ export function issueRoutes(
     }
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
 
+    // Verified visual reads remain attachment responses; HTML never executes at
+    // the main origin. Bound the stream before buffering and verify actual bytes.
+    if (typeof req.query.expectedSha256 === "string") {
+      const expected = req.query.expectedSha256;
+      if (!/^[a-f0-9]{64}$/.test(expected) || attachment.byteSize > 2 * 1024 * 1024) {
+        res.status(400).json({ error: "Invalid verified attachment request" }); return;
+      }
+      const object = await storage.getObject(attachment.companyId, attachment.objectKey);
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of object.stream) {
+        const bytes = Buffer.from(chunk);
+        size += bytes.length;
+        if (size > 2 * 1024 * 1024) { object.stream.destroy(); throw unprocessable("Presentation too large"); }
+        chunks.push(bytes);
+      }
+      const bytes = Buffer.concat(chunks);
+      if (createHash("sha256").update(bytes).digest("hex") !== expected) {
+        res.status(409).json({ error: "Attachment SHA-256 does not match" }); return;
+      }
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.attachment(attachment.originalFilename ?? "diagram.html").type("text/html").send(bytes);
+      return;
+    }
+
     const contentLength = attachment.byteSize;
     const range = parseAttachmentRangeHeader(
       typeof req.headers.range === "string" ? req.headers.range : undefined,
@@ -19694,6 +19734,11 @@ export function issueRoutes(
     if (!(await assertDeliverableMutationAllowedByRunContext(req, res, issue)))
       return;
 
+    const removed = await svc.removeAttachment(attachmentId);
+    if (!removed) {
+      res.status(404).json({ error: "Attachment not found" });
+      return;
+    }
     try {
       await storage.deleteObject(attachment.companyId, attachment.objectKey);
     } catch (err) {
@@ -19703,11 +19748,7 @@ export function issueRoutes(
       );
     }
 
-    const removed = await svc.removeAttachment(attachmentId);
-    if (!removed) {
-      res.status(404).json({ error: "Attachment not found" });
-      return;
-    }
+
 
     const actor = getActorInfo(req);
     await logActivity(db, {

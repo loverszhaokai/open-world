@@ -799,6 +799,7 @@ export type {
   IssueThreadInteractionResult,
   IssueDocument,
   IssueDocumentSummary,
+  DocumentPresentation,
   DocumentRevision,
   DocumentFormat,
   LegacyPlanDocument,

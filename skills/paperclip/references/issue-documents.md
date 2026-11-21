@@ -56,3 +56,14 @@ reconcile changes before retrying; preserve the skill's bounded-write retry rule
 If a write's status or receipt is unclear, GET the document to check the saved
 content and revision before retrying. If delivery cannot be confirmed, report
 that limitation instead of claiming the requested document was saved.
+
+## Optional revision-bound diagrams
+
+Keep the complete Markdown body in the document. On servers supporting document
+presentations, upload visual-only self-contained HTML on the same task, then PUT
+`/api/issues/{issueId}/documents/{key}/presentation` with exact `documentRevisionId`,
+`attachmentId`, `attachmentSha256`, and `baseVersion` (null for first binding).
+Read current document metadata before replacement; do not guess from body links.
+Locked/reviewed revisions reject changes. New body revisions require new visual bindings.
+See [the producer and migration contract](../../../doc/document-presentations.md) and
+`node scripts/document-presentations/deliver.mjs manifest.json` (dry run by default).

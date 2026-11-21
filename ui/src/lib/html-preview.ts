@@ -26,3 +26,14 @@ export function htmlPreviewDocument(html: string) {
   // artifact in the host document (even detached DOMs can load resources).
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}"><meta name="referrer" content="no-referrer"></head><body>${html}</body></html>`;
 }
+
+/** A trusted outer document constrains navigation of the untrusted inner frame.
+ * CSP on the artifact alone does not block location.replace() on its own frame.
+ * srcdoc is permitted with frame-src 'none', but remote frame navigations are not.
+ * Both frames have opaque origins, so the artifact cannot change the wrapper.
+ */
+export function htmlPreviewSandboxDocument(html: string) {
+  const inner = htmlPreviewDocument(html)
+    .replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;height:100%;overflow:hidden}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe title="Interactive HTML content" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${inner}"></iframe></body></html>`;
+}

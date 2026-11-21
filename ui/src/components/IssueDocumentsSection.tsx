@@ -1,3 +1,4 @@
+import { DocumentPresentation } from "./DocumentPresentation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
@@ -1274,6 +1275,14 @@ export function IssueDocumentsSection({
                       activeDraft || isHistoricalPreview ? "" : "rounded-md hover:bg-accent/10"
                     }`}
                   >
+                    {!activeDraft && <DocumentPresentation
+                      key={`${selectedHistoricalRevision?.id ?? doc.latestRevisionId}:${selectedHistoricalRevision?.presentation?.version ?? doc.presentation?.version}`}
+                      presentation={selectedHistoricalRevision ? selectedHistoricalRevision.presentation : doc.presentation}
+                      stale={!isHistoricalPreview && doc.presentationStale}
+                      title={doc.title ?? doc.key}
+                      reportId={`document-${doc.key}-report`}
+                    />}
+                    <div id={`document-${doc.key}-report`} />
                     {(() => {
                       const renderedDocumentBody = isHistoricalPreview ? (
                         renderFoldableBody(displayedBody, documentBodyContentClassName, externalReferences)

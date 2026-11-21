@@ -85,3 +85,13 @@ Sources: Source: [IssueDocumentsSection.tsx](../../ui/src/components/IssueDocume
 ### Documentation scope: Artifacts and work products
 
 Document/attachment/library/work-product journeys are mapped; every media preview type, storage backend, annotation conflict, and runtime-resource lifecycle variant remains separate.
+
+### Revision-bound visual reports (2026-11-21)
+
+`documents-artifacts/documents`: open the existing `#document-plan` / `#document-report`
+link. A bound self-contained HTML diagram appears above full native Markdown. Verify
+interaction, expansion, full report copy, history and mobile; missing/stale diagrams must
+leave the report readable. Aggregate artifacts omit the current bound attachment card.
+Local fixtures: `html-artifacts-04-document`; API/helper and migration contract:
+[document presentations](../../doc/document-presentations.md). Production migration and
+real sample acceptance remain release-owner work, not implied by fixture coverage.
