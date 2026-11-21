@@ -2055,6 +2055,21 @@
       ]
     },
     {
+      "id": "skill:skills/paperclip/references/issue-documents.md:optional-revision-bound-diagrams:60",
+      "sourceKind": "skill_heading",
+      "sourceAnchor": "skills/paperclip/references/issue-documents.md:60",
+      "title": "Optional revision-bound diagrams",
+      "expectedSemantics": "Skill guidance headed “Optional revision-bound diagrams”.",
+      "primaryDisposition": "optional_agent_tool",
+      "requiredGrants": [],
+      "assertionClasses": [
+        "control_plane_invariant"
+      ],
+      "evidenceIds": [
+        "skill:skills/paperclip/references/issue-documents.md:60"
+      ]
+    },
+    {
       "id": "skill:skills/paperclip/references/issue-workspaces.md:issue-workspace-runtime-controls:1",
       "sourceKind": "skill_heading",
       "sourceAnchor": "skills/paperclip/references/issue-workspaces.md:1",
