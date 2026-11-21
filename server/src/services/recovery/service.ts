@@ -4468,6 +4468,11 @@ export function recoveryService(
     );
   }
 
+  // How long an in_progress issue may sit with no run and no lock before it is
+  // handed back to the scheduler. Generous so a brief gap between claiming a
+  // task and recording its run is never mistaken for an abandoned task.
+  const STRANDED_IN_PROGRESS_GRACE_MS = 30 * 60 * 1000;
+
   async function reconcileStrandedAssignedIssues(opts?: {
     issueCreatedAtGte?: Date | null;
   }) {
@@ -5403,6 +5408,39 @@ export function recoveryService(
       }
 
       if (!latestRun && !issue.checkoutRunId && !issue.executionRunId) {
+        // An in_progress issue with no run at all and no lock is not "waiting on
+        // work" — nothing is executing it and nothing will, because every
+        // recovery path keys off a run id. The UI still renders it as live. Once
+        // it has been untouched for the grace window, hand it back so a
+        // scheduler can pick it up again. Other statuses keep the old skip:
+        // todo/in_review without a run are legitimately idle, not stranded.
+        const strandedSince = issue.updatedAt ? new Date(issue.updatedAt).getTime() : null;
+        if (
+          issue.status === "in_progress" &&
+          !issue.executionLockedAt &&
+          strandedSince !== null &&
+          Date.now() - strandedSince > STRANDED_IN_PROGRESS_GRACE_MS
+        ) {
+          await db
+            .update(issues)
+            .set({ status: "todo", updatedAt: new Date() })
+            .where(
+              and(
+                eq(issues.id, issue.id),
+                eq(issues.status, "in_progress"),
+                isNull(issues.checkoutRunId),
+                isNull(issues.executionRunId),
+                isNull(issues.executionLockedAt),
+              ),
+            );
+          logger.warn(
+            { issueId: issue.id, companyId: issue.companyId, strandedSince: issue.updatedAt },
+            "reset in_progress issue with no run or lock back to todo",
+          );
+          result.dispatchRequeued += 1;
+          result.issueIds.push(issue.id);
+          continue;
+        }
         result.skipped += 1;
         continue;
       }
@@ -6263,6 +6301,10 @@ export function recoveryService(
   // still claims to be live but can no longer reach a terminal status on its
   // own, so a stuck "running" run can no longer block the sweep. Idempotent and
   // safe: clears at most one row's worth of lock columns per candidate.
+  // Grace window before a run-less executionLockedAt is treated as residue.
+  // Long enough that a lock claimed by a live scheduler is never stolen.
+  const STALE_LOCK_GRACE_MS = 30 * 60 * 1000;
+
   async function sweepStaleIssueLocks() {
     const result = {
       cleared: 0,
@@ -6280,7 +6322,17 @@ export function recoveryService(
       })
       .from(issues)
       .where(
-        sql`(${issues.checkoutRunId} is not null or ${issues.executionRunId} is not null)`,
+        // A lock is swept when a run column still references a run, OR when the
+        // issue kept only a stale executionLockedAt timestamp. The timestamp-only
+        // residue is what a killed process leaves behind: the run row never
+        // landed, so the run-id predicate alone can never see it and the lock
+        // survives forever. Require the timestamp to be older than the grace
+        // window so a lock claimed moments ago by a live scheduler is not stolen.
+        sql`(${issues.checkoutRunId} is not null or ${issues.executionRunId} is not null
+             or (${issues.checkoutRunId} is null
+                 and ${issues.executionRunId} is null
+                 and ${issues.executionLockedAt} is not null
+                 and ${issues.executionLockedAt} < ${new Date(Date.now() - STALE_LOCK_GRACE_MS).toISOString()}))`,
       );
 
     const referencedRunIds = [

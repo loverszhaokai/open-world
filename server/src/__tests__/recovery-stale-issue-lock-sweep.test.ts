@@ -180,6 +180,70 @@ describeEmbeddedPostgres("recovery sweepStaleIssueLocks", () => {
     );
   });
 
+  // Regression: PEN-109. A killed process leaves executionLockedAt behind while
+  // both run ids are null, because the run row never landed. The run-id
+  // predicate could never see such a row, so the lock survived every sweep and
+  // the task was stuck "executing" forever with nothing executing it.
+  it("clears a run-less lock once it is older than the grace window", async () => {
+    const { companyId, agentId } = await seed();
+    const issueId = randomUUID();
+    await db.insert(issues).values({
+      id: issueId,
+      companyId,
+      title: "Stale lock — timestamp only, no run ids",
+      status: "todo",
+      priority: "high",
+      assigneeAgentId: agentId,
+      checkoutRunId: null,
+      executionRunId: null,
+      executionLockedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+
+    const heartbeat = heartbeatService(db);
+    const result = await heartbeat.sweepStaleIssueLocks();
+
+    expect(result.issueIds).toContain(issueId);
+
+    const row = await db
+      .select({ executionLockedAt: issues.executionLockedAt })
+      .from(issues)
+      .where(eq(issues.id, issueId))
+      .then((rows) => rows[0]);
+    expect(row?.executionLockedAt).toBeNull();
+  });
+
+  // The guard that makes the widened predicate safe: a lock claimed moments ago
+  // belongs to a live scheduler that has not yet written its run row. Sweeping
+  // it would steal the task out from under a run that is about to start.
+  it("leaves a freshly claimed run-less lock alone", async () => {
+    const { companyId, agentId } = await seed();
+    const issueId = randomUUID();
+    const freshLock = new Date();
+    await db.insert(issues).values({
+      id: issueId,
+      companyId,
+      title: "Fresh lock — must survive",
+      status: "todo",
+      priority: "high",
+      assigneeAgentId: agentId,
+      checkoutRunId: null,
+      executionRunId: null,
+      executionLockedAt: freshLock,
+    });
+
+    const heartbeat = heartbeatService(db);
+    const result = await heartbeat.sweepStaleIssueLocks();
+
+    expect(result.issueIds).not.toContain(issueId);
+
+    const row = await db
+      .select({ executionLockedAt: issues.executionLockedAt })
+      .from(issues)
+      .where(eq(issues.id, issueId))
+      .then((rows) => rows[0]);
+    expect(row?.executionLockedAt).not.toBeNull();
+  });
+
   it("does not clear locks while the referenced run is still running", async () => {
     const { companyId, agentId, runningRunId } = await seed();
     const issueId = randomUUID();
