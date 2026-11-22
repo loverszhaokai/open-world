@@ -2099,9 +2099,16 @@ function StreamlinedInbox({
     }, 200);
   }, [dismissAlert, dismissInboxItem, noteInboxSortInteraction]);
 
-  const nonIssueUnreadState = (key: string): NonIssueUnreadState => {
+  const nonIssueUnreadState = (
+    key: string,
+    opts: { resolved?: boolean } = {},
+  ): NonIssueUnreadState => {
     if (!canArchiveFromTab) return null;
-    const isRead = readItems.has(key);
+    // A decided item is not news. Approvals keep their unread dot in
+    // localStorage and are only ever marked read by hand, so an approval the
+    // user already approved/rejected kept nagging forever (and came back on
+    // another browser, since that store is per-device). Treat resolved as read.
+    const isRead = readItems.has(key) || opts.resolved === true;
     const isFading = fadingNonIssueItems.has(key);
     if (isFading) return "fading";
     if (!isRead) return "visible";
@@ -3153,7 +3160,9 @@ function StreamlinedInbox({
                           onApprove={() => approveMutation.mutate(item.approval.id)}
                           onReject={() => rejectMutation.mutate(item.approval.id)}
                           isPending={approveMutation.isPending || rejectMutation.isPending}
-                          unreadState={nonIssueUnreadState(approvalKey)}
+                          unreadState={nonIssueUnreadState(approvalKey, {
+                            resolved: item.approval.status !== "pending",
+                          })}
                           onMarkRead={() => handleMarkNonIssueRead(approvalKey)}
                           onArchive={canArchiveFromTab ? () => handleArchiveNonIssue(approvalKey) : undefined}
                           archiveDisabled={isArchiving}
