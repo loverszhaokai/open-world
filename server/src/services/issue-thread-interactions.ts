@@ -3075,6 +3075,55 @@ export function issueThreadInteractionService(
       return withAcceptanceReadiness(interactions, issue);
     },
 
+    /**
+     * Company-wide pending interactions, oldest first (= longest wait first).
+     * Mirrors `listForIssue`: a pending row on a closed issue reads as expired
+     * there, so it is excluded here. Callers must still apply issue read access.
+     */
+    listPendingForCompany: async (
+      companyId: string,
+      filters: { kind?: string } = {},
+    ) => {
+      const conditions = [
+        eq(issueThreadInteractions.companyId, companyId),
+        eq(issueThreadInteractions.status, "pending"),
+        sql`${issues.status} NOT IN ('done', 'cancelled')`,
+      ];
+      if (filters.kind) conditions.push(eq(issueThreadInteractions.kind, filters.kind));
+      return db
+        .select({
+          id: issueThreadInteractions.id,
+          kind: issueThreadInteractions.kind,
+          status: issueThreadInteractions.status,
+          title: issueThreadInteractions.title,
+          summary: issueThreadInteractions.summary,
+          createdAt: issueThreadInteractions.createdAt,
+          dismissedAt: issueThreadInteractions.dismissedAt,
+          createdByAgentId: issueThreadInteractions.createdByAgentId,
+          createdByAgentName: agents.name,
+          createdByUserId: issueThreadInteractions.createdByUserId,
+          issue: {
+            id: issues.id,
+            companyId: issues.companyId,
+            identifier: issues.identifier,
+            title: issues.title,
+            status: issues.status,
+            projectId: issues.projectId,
+            parentId: issues.parentId,
+            assigneeAgentId: issues.assigneeAgentId,
+            assigneeUserId: issues.assigneeUserId,
+          },
+        })
+        .from(issueThreadInteractions)
+        .innerJoin(issues, eq(issues.id, issueThreadInteractions.issueId))
+        .leftJoin(agents, eq(agents.id, issueThreadInteractions.createdByAgentId))
+        .where(and(...conditions))
+        .orderBy(
+          asc(issueThreadInteractions.createdAt),
+          asc(issueThreadInteractions.id),
+        );
+    },
+
     getById: async (interactionId: string) => {
       const row = await db
         .select()

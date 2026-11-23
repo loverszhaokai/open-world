@@ -8023,6 +8023,23 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
+  path: "/api/companies/{companyId}/interactions",
+  tags: ["issues"],
+  summary: "List the company's pending issue thread interactions",
+  description:
+    "Pending interactions across every issue the caller can read, longest wait first. Pending rows on done/cancelled issues are excluded (they read as expired per issue). Agents and board users may call it.",
+  request: {
+    params: z.object({ companyId: z.string() }),
+    query: z.object({
+      status: z.literal("pending").optional(),
+      kind: z.string().optional(),
+    }),
+  },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden },
+});
+
+registry.registerPath({
+  method: "get",
   path: "/api/issues/{id}/interactions",
   tags: ["issues"],
   summary: "List issue thread interactions",

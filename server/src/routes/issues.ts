@@ -16770,6 +16770,56 @@ export function issueRoutes(
     },
   );
 
+  // Company-wide pending interaction queue, longest wait first. Readable by
+  // agents and board users alike; each row passes the same `issue:read`
+  // decision as `GET /issues/:id/interactions`, so totals match per-issue sums.
+  router.get("/companies/:companyId/interactions", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const status = req.query.status ?? "pending";
+    if (status !== "pending") throw badRequest("status must be 'pending'");
+    const kindRaw = req.query.kind;
+    if (kindRaw !== undefined && (typeof kindRaw !== "string" || !kindRaw.trim())) {
+      throw badRequest("kind must be a non-empty string");
+    }
+    const rows = await issueThreadInteractionService(db).listPendingForCompany(
+      companyId,
+      { kind: typeof kindRaw === "string" ? kindRaw.trim() : undefined },
+    );
+    const issuesById = new Map(rows.map((row) => [row.issue.id, row.issue]));
+    const readableIssueIds = new Set<string>();
+    await Promise.all([...issuesById.values()].map(async (issue) => {
+      if ((await decideIssueAccess(req, issue, "issue:read")).allowed) {
+        readableIssueIds.add(issue.id);
+      }
+    }));
+    const nowMs = Date.now();
+    const items = rows
+      .filter((row) => readableIssueIds.has(row.issue.id))
+      .map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        status: row.status,
+        title: row.title,
+        summary: row.summary,
+        createdAt: row.createdAt,
+        dismissedAt: row.dismissedAt,
+        waitingHours: Math.round(((nowMs - row.createdAt.getTime()) / 3_600_000) * 10) / 10,
+        createdBy: row.createdByAgentId
+          ? { type: "agent" as const, agentId: row.createdByAgentId, name: row.createdByAgentName }
+          : row.createdByUserId
+            ? { type: "user" as const, userId: row.createdByUserId }
+            : null,
+        issue: {
+          id: row.issue.id,
+          identifier: row.issue.identifier,
+          title: row.issue.title,
+          status: row.issue.status,
+        },
+      }));
+    res.json({ total: items.length, items });
+  });
+
   router.get("/issues/:id/interactions", async (req, res) => {
     const id = req.params.id as string;
     const issue = await getAccessibleResource(
